@@ -1,0 +1,53 @@
+// Style presets and ready-made templates (each = jewelry type + parameter overrides).
+
+export const STYLE_PRESETS = {
+  ring: {
+    classic:      { profile: 'comfort', shankStyle: 'classic', texture: 'none', headType: 'prong', prongCount: 4, prongStyle: 'round', spikes: 0, openwork: 'none', milgrain: false, cathedral: false, coils: 0 },
+    contemporary: { profile: 'knife', shankStyle: 'classic', texture: 'none', widthTop: 2.0, widthBottom: 1.8, headType: 'prong', prongStyle: 'claw', prongCount: 4, cathedral: false, spikes: 0, openwork: 'none', coils: 0 },
+    luxury:       { profile: 'comfort', headType: 'halo', prongCount: 6, cathedral: true, milgrain: true, accentCount: 6, accentSize: 1.2, widthTop: 2.6, texture: 'none', spikes: 0, coils: 0 },
+    gothic:       { profile: 'knife', shankStyle: 'classic', widthTop: 6.5, widthBottom: 5.5, thickTop: 2.0, thickBottom: 1.8, texture: 'none', headType: 'prong', prongStyle: 'pointed', prongCount: 6, spikes: 14, spikeLen: 2.0, spikeBase: 1.2, openwork: 'arch', openCount: 12, openSize: 0.55, cut: 'marquise', coils: 0 },
+    hammered:     { profile: 'flat', shankStyle: 'classic', widthTop: 5.0, widthBottom: 4.5, thickTop: 1.9, thickBottom: 1.8, texture: 'hammered', textureDepth: 0.14, textureScale: 1.2, headType: 'bezel', spikes: 0, openwork: 'none', coils: 0 },
+    organic:      { profile: 'dome', texture: 'organic', textureDepth: 0.25, textureScale: 1.6, shankStyle: 'bypass', headType: 'bezel', coils: 4, spikes: 0, openwork: 'none', cut: 'pear' },
+    sculptural:   { shankStyle: 'twisted', twist: 2.5, widthTop: 3.6, widthBottom: 3.0, headType: 'prong', prongCount: 6, texture: 'none', spikes: 0, coils: 0 },
+    floral:       { headType: 'halo', haloStone: 1.5, prongStyle: 'claw', prongCount: 6, milgrain: false, coils: 2, profile: 'comfort', texture: 'none', spikes: 0 },
+    artdeco:      { cut: 'emerald', profile: 'flat', widthTop: 3.0, widthBottom: 2.4, milgrain: true, headType: 'halo', haloStone: 1.2, accentCount: 4, spikes: 0, texture: 'none', coils: 0 },
+    vintage:      { profile: 'comfort', milgrain: true, cathedral: true, openwork: 'quatrefoil', openCount: 14, openSize: 0.5, widthTop: 3.6, widthBottom: 3.0, prongStyle: 'claw', spikes: 0, texture: 'none', coils: 0 },
+    architectural:{ profile: 'square', cathedral: true, openwork: 'diamond', openCount: 10, widthTop: 4.5, widthBottom: 3.5, spikes: 0, texture: 'none', coils: 0 },
+    minimal:      { profile: 'comfort', widthTop: 1.8, widthBottom: 1.7, thickTop: 1.5, thickBottom: 1.4, headType: 'prong', prongCount: 4, carat: 0.3, spikes: 0, openwork: 'none', milgrain: false, cathedral: false, texture: 'none', coils: 0 },
+    tribal:       { profile: 'flat', widthTop: 7, widthBottom: 6, thickTop: 2, thickBottom: 1.9, texture: 'ridged', textureDepth: 0.25, textureScale: 1.5, headType: 'none', spikes: 0, backHollow: true, hollowDepth: 0.6 },
+  },
+  pendant: {
+    classic:      { shape: 'oval', headType: 'prong', openwork: 'none', spikes: 0, coils: 0, milgrain: false },
+    contemporary: { shape: 'teardrop', headType: 'bezel', openwork: 'none', bevel: 0.6, spikes: 0, coils: 0 },
+    luxury:       { shape: 'cushion', headType: 'halo', milgrain: true, backHollow: true, spikes: 0 },
+    gothic:       { shape: 'gothic-cross', height: 34, width: 24, headType: 'bezel', cut: 'pear', spikes: 18, spikeLen: 1.8, spikeBase: 1.1, openwork: 'arch', openSize: 1.6, openBridge: 0.9, rim: 1.4, backHollow: false },
+    hammered:     { shape: 'circle', headType: 'none', backHollow: true, frontWall: 0.8 },
+    organic:      { shape: 'teardrop', coils: 5, headType: 'bezel', cut: 'pear' },
+    floral:       { shape: 'circle', headType: 'halo', coils: 3, openwork: 'circle', openSize: 1.2 },
+    artdeco:      { shape: 'hexagon', cut: 'emerald', milgrain: true, openwork: 'diamond', openSize: 1.4 },
+    vintage:      { shape: 'oval', milgrain: true, openwork: 'quatrefoil', openSize: 1.6, headType: 'bezel' },
+    architectural:{ shape: 'shield', openwork: 'hex', openSize: 1.8, openBridge: 0.9, headType: 'prong' },
+    minimal:      { shape: 'circle', height: 12, width: 12, thickness: 1.2, headType: 'bezel', carat: 0.15 },
+    tribal:       { shape: 'star', headType: 'none', backHollow: true },
+    sculptural:   { shape: 'crescent', headType: 'none', coils: 2 },
+  },
+};
+
+export const TEMPLATES = [
+  { id: 'solitaire', label: 'Classic solitaire · 1 ct round · 18K', type: 'ring', params: { metal: '18ky', style: 'classic', ringSize: 6.5, cut: 'round', carat: 1, prongCount: 4, rails: 1, targetWeight: 3.2 } },
+  { id: 'oval-halo', label: 'Oval halo · cathedral · pavé', type: 'ring', params: { metal: '18kw', style: 'luxury', cut: 'oval', carat: 1.5, headType: 'halo', cathedral: true, accentCount: 6, milgrain: false } },
+  { id: 'gothic-ring', label: 'Gothic spike ring · lancet openwork', type: 'ring', params: { metal: 'ag925', style: 'gothic' } },
+  { id: 'hammered-band', label: 'Hammered band · bezel · hollowed', type: 'ring', params: { metal: '14ky', style: 'hammered', backHollow: true, hollowDepth: 0.5, carat: 0.25 } },
+  { id: 'deco', label: 'Art Deco emerald cut · milgrain', type: 'ring', params: { metal: 'pt950', style: 'artdeco', carat: 1.2 } },
+  { id: 'twist', label: 'Sculptural twisted band', type: 'ring', params: { metal: '18kr', style: 'sculptural', carat: 0.7 } },
+  { id: 'organic', label: 'Organic bypass · pear bezel · vines', type: 'ring', params: { metal: '18ky', style: 'organic', carat: 0.8 } },
+  { id: 'gothic-cross', label: 'Gothic cross pendant', type: 'pendant', params: { metal: 'ag925', style: 'gothic' } },
+  { id: 'deco-pendant', label: 'Art Deco hexagon pendant', type: 'pendant', params: { metal: '18kw', style: 'artdeco', carat: 0.6 } },
+  { id: 'heart', label: 'Heart pendant · halo', type: 'pendant', params: { metal: '14kr', shape: 'heart', headType: 'halo', cut: 'heart', carat: 0.5 } },
+  { id: 'stud', label: 'Four-prong studs · 0.5 ct each', type: 'earring', params: { metal: '14kw', earType: 'stud', carat: 0.5 } },
+  { id: 'hoop', label: 'Hammered hoops 20 mm', type: 'earring', params: { metal: '18ky', earType: 'hoop', hoopDia: 20, texture: 'hammered' } },
+  { id: 'drop', label: 'Teardrop drops', type: 'earring', params: { metal: '18ky', earType: 'drop', dropShape: 'teardrop', headType: 'bezel', carat: 0.3 } },
+  { id: 'bangle', label: 'Hinged oval bangle', type: 'bangle', params: { metal: '18ky', hinge: true, texture: 'none', backHollow: true } },
+  { id: 'cuff', label: 'Gothic spike cuff', type: 'bangle', params: { metal: 'ag925', cuffGap: 25, spikes: 22, width: 10, thickness: 2.6, profile: 'knife' } },
+  { id: 'chain', label: 'Cable chain 45 cm', type: 'chain', params: { metal: '18ky', linkType: 'cable', wireDia: 0.8 } },
+];

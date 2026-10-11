@@ -1,0 +1,6 @@
+{
+  "app": "paloan-jewelry-cad", "version": 1, "type": "pendant",
+  "params": { "metal": "ag925", "style": "gothic", "shape": "gothic-cross", "height": 34, "width": 24, "thickness": 1.6,
+    "headType": "bezel", "cut": "pear", "carat": 0.5, "spikes": 18, "spikeLen": 1.8, "spikeBase": 1.1,
+    "openwork": "arch", "openSize": 1.6, "openBridge": 0.9, "rim": 1.4, "bail": "loop", "bailInner": 3.6, "bailWire": 1.1 }
+}

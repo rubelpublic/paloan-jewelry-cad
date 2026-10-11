@@ -1,0 +1,7 @@
+{
+  "app": "paloan-jewelry-cad", "version": 1, "type": "ring",
+  "params": { "metal": "18ky", "style": "classic", "ringSize": 6.5, "profile": "comfort", "shankStyle": "classic",
+    "widthTop": 2.4, "widthBottom": 2.0, "thickTop": 1.9, "thickBottom": 1.6, "headType": "prong", "cut": "round",
+    "gem": "diamond", "sizeMode": "carat", "carat": 1.0, "prongCount": 4, "prongStyle": "round", "galleryLift": 1.2, "rails": 1,
+    "targetWeight": 3.2 }
+}

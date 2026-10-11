@@ -1,0 +1,7 @@
+{
+  "app": "paloan-jewelry-cad", "version": 1, "type": "ring",
+  "params": { "metal": "18kw", "style": "gothic", "ringSize": 7, "profile": "knife", "shankStyle": "classic",
+    "widthTop": 7, "widthBottom": 6.3, "thickTop": 2.1, "thickBottom": 1.9, "headType": "prong", "cut": "oval", "gem": "moissanite",
+    "sizeMode": "carat", "carat": 2, "prongCount": 6, "prongStyle": "pointed", "spikes": 14, "spikeLen": 2.0, "spikeBase": 1.2,
+    "openwork": "arch", "openCount": 12, "openSize": 0.55, "openBridge": 1.24, "targetWeight": 8 }
+}

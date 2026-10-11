@@ -1,0 +1,157 @@
+// UI parameter schemas per jewelry type. Fields render into the Design panel.
+import { METALS, GEMS, CUTS, STYLE_NOTES } from './data.js';
+import { PROFILES } from './geom/util.js';
+import { RING_DEFAULTS } from './geom/ring.js';
+import { PENDANT_DEFAULTS } from './geom/pendant.js';
+import { EARRING_DEFAULTS, BANGLE_DEFAULTS, CHAIN_DEFAULTS } from './geom/others.js';
+
+const o = (obj, key = 'label') => Object.fromEntries(Object.entries(obj).map(([k, v]) => [k, typeof v === 'string' ? v : v[key]]));
+const metalOpts = o(METALS), gemOpts = o(GEMS), cutOpts = o(CUTS), profileOpts = o(PROFILES);
+const styleOpts = Object.fromEntries(Object.keys(STYLE_NOTES).map((k) => [k, k[0].toUpperCase() + k.slice(1).replace('deco', ' Deco')]));
+const has = (k, ...v) => (p) => v.includes(p[k]);
+const not = (k, ...v) => (p) => !v.includes(p[k]);
+const and = (...fs) => (p) => fs.every((f) => f(p));
+
+const COMMON = [
+  { g: 'Material', k: 'metal', label: 'Metal / alloy', t: 'select', opts: metalOpts },
+  { g: 'Material', k: 'style', label: 'Design style', t: 'select', opts: styleOpts, note: 'Applies a style preset' },
+  { g: 'Material', k: 'targetWeight', label: 'Target weight (g, 0 = none)', t: 'number', min: 0, max: 200, step: 0.1 },
+];
+const STONE = (show = () => true) => [
+  { g: 'Center stone', k: 'headType', label: 'Setting', t: 'select', opts: { none: 'No stone', prong: 'Prong', bezel: 'Bezel', halo: 'Halo + prongs' } },
+  { g: 'Center stone', k: 'cut', label: 'Cut', t: 'select', opts: cutOpts, show: and(show, not('headType', 'none')) },
+  { g: 'Center stone', k: 'gem', label: 'Gem', t: 'select', opts: gemOpts, show: and(show, not('headType', 'none')) },
+  { g: 'Center stone', k: 'sizeMode', label: 'Size by', t: 'select', opts: { carat: 'Carat weight', mm: 'Millimetres' }, show: and(show, not('headType', 'none')) },
+  { g: 'Center stone', k: 'carat', label: 'Carat', t: 'range', min: 0.05, max: 6, step: 0.01, unit: 'ct', show: and(show, not('headType', 'none'), has('sizeMode', 'carat')) },
+  { g: 'Center stone', k: 'stoneL', label: 'Length', t: 'range', min: 1, max: 20, step: 0.05, unit: 'mm', show: and(show, not('headType', 'none'), has('sizeMode', 'mm')) },
+  { g: 'Center stone', k: 'stoneW', label: 'Width', t: 'range', min: 1, max: 16, step: 0.05, unit: 'mm', show: and(show, not('headType', 'none'), has('sizeMode', 'mm')) },
+  { g: 'Center stone', k: 'prongCount', label: 'Prongs', t: 'range', min: 2, max: 8, step: 1, show: and(show, has('headType', 'prong', 'halo')) },
+  { g: 'Center stone', k: 'prongStyle', label: 'Prong tip', t: 'select', opts: { round: 'Round bead', claw: 'Claw / eagle', pointed: 'Pointed (gothic)' }, show: and(show, has('headType', 'prong', 'halo')) },
+  { g: 'Center stone', k: 'prongDia', label: 'Prong Ø (0 = auto)', t: 'range', min: 0, max: 1.6, step: 0.05, unit: 'mm', show: and(show, has('headType', 'prong', 'halo')) },
+  { g: 'Center stone', k: 'haloStone', label: 'Halo melee', t: 'range', min: 0.8, max: 2.5, step: 0.05, unit: 'mm', show: and(show, has('headType', 'halo')) },
+  { g: 'Center stone', k: 'haloGap', label: 'Halo gap', t: 'range', min: 0, max: 0.5, step: 0.01, unit: 'mm', show: and(show, has('headType', 'halo')) },
+  { g: 'Center stone', k: 'seatCut', label: 'Cut stone seats (boolean)', t: 'check', show: not('headType', 'none') },
+];
+
+export const SCHEMAS = {
+  ring: {
+    defaults: { metal: '18ky', style: 'classic', targetWeight: 0, ...RING_DEFAULTS },
+    fields: [
+      ...COMMON,
+      { g: 'Shank', k: 'ringSize', label: 'Ring size (US)', t: 'range', min: 2, max: 15, step: 0.25 },
+      { g: 'Shank', k: 'shankStyle', label: 'Shank style', t: 'select', opts: { classic: 'Classic', split: 'Split shank', bypass: 'Bypass', twisted: 'Twisted strands' } },
+      { g: 'Shank', k: 'profile', label: 'Profile', t: 'select', opts: profileOpts, show: not('shankStyle', 'twisted') },
+      { g: 'Shank', k: 'widthTop', label: 'Width at top', t: 'range', min: 1.2, max: 14, step: 0.05, unit: 'mm' },
+      { g: 'Shank', k: 'widthBottom', label: 'Width at bottom', t: 'range', min: 1.2, max: 14, step: 0.05, unit: 'mm' },
+      { g: 'Shank', k: 'thickTop', label: 'Thickness at top', t: 'range', min: 0.8, max: 5, step: 0.05, unit: 'mm', show: not('shankStyle', 'twisted') },
+      { g: 'Shank', k: 'thickBottom', label: 'Thickness at bottom', t: 'range', min: 0.8, max: 5, step: 0.05, unit: 'mm', show: not('shankStyle', 'twisted') },
+      { g: 'Shank', k: 'splitGap', label: 'Split opening', t: 'range', min: 0.4, max: 6, step: 0.1, unit: 'mm', show: has('shankStyle', 'split', 'bypass') },
+      { g: 'Shank', k: 'twist', label: 'Twists', t: 'range', min: 1, max: 6, step: 0.5, show: has('shankStyle', 'twisted') },
+      { g: 'Surface', k: 'texture', label: 'Texture', t: 'select', opts: { none: 'Polished', hammered: 'Hammered / beaten', organic: 'Organic flow', ridged: 'Ridged (tribal)', bark: 'Bark', florentine: 'Florentine lines' } },
+      { g: 'Surface', k: 'textureDepth', label: 'Texture depth', t: 'range', min: 0.03, max: 0.5, step: 0.01, unit: 'mm', show: not('texture', 'none') },
+      { g: 'Surface', k: 'textureScale', label: 'Texture scale', t: 'range', min: 0.4, max: 4, step: 0.1, show: not('texture', 'none') },
+      ...STONE(),
+      { g: 'Head', k: 'galleryLift', label: 'Gallery lift (culet → shank)', t: 'range', min: 0.2, max: 4, step: 0.05, unit: 'mm', show: not('headType', 'none') },
+      { g: 'Head', k: 'rails', label: 'Gallery rails', t: 'range', min: 0, max: 2, step: 1, show: has('headType', 'prong', 'halo') },
+      { g: 'Head', k: 'cathedral', label: 'Cathedral arches', t: 'check', show: has('headType', 'prong', 'halo') },
+      { g: 'Ornament', k: 'accentCount', label: 'Pavé accents per side', t: 'range', min: 0, max: 12, step: 1 },
+      { g: 'Ornament', k: 'accentSize', label: 'Accent size', t: 'range', min: 0.8, max: 2.5, step: 0.05, unit: 'mm', show: (p) => p.accentCount > 0 },
+      { g: 'Ornament', k: 'milgrain', label: 'Milgrain edges', t: 'check' },
+      { g: 'Ornament', k: 'spikes', label: 'Spikes', t: 'range', min: 0, max: 40, step: 1 },
+      { g: 'Ornament', k: 'spikeRows', label: 'Spike rows', t: 'range', min: 1, max: 2, step: 1, show: (p) => p.spikes > 0 },
+      { g: 'Ornament', k: 'spikeLen', label: 'Spike length', t: 'range', min: 0.5, max: 6, step: 0.05, unit: 'mm', show: (p) => p.spikes > 0 },
+      { g: 'Ornament', k: 'spikeBase', label: 'Spike base Ø', t: 'range', min: 0.5, max: 3, step: 0.05, unit: 'mm', show: (p) => p.spikes > 0 },
+      { g: 'Ornament', k: 'coils', label: 'Curling coils', t: 'range', min: 0, max: 10, step: 1 },
+      { g: 'Openwork', k: 'openwork', label: 'Openwork', t: 'select', opts: { none: 'None', arch: 'Gothic lancet', circle: 'Circles', diamond: 'Diamonds', quatrefoil: 'Quatrefoil' }, show: not('shankStyle', 'twisted') },
+      { g: 'Openwork', k: 'openCount', label: 'Windows', t: 'range', min: 4, max: 30, step: 1, show: not('openwork', 'none') },
+      { g: 'Openwork', k: 'openSize', label: 'Window size (× width)', t: 'range', min: 0.2, max: 0.85, step: 0.01, show: not('openwork', 'none') },
+      { g: 'Metal saving', k: 'backHollow', label: 'Hollow under-shank', t: 'check', show: has('shankStyle', 'classic') },
+      { g: 'Metal saving', k: 'hollowDepth', label: 'Hollow depth', t: 'range', min: 0.05, max: 2.5, step: 0.01, unit: 'mm', show: (p) => p.backHollow && p.shankStyle === 'classic' },
+      { g: 'Metal saving', k: 'hollowRail', label: 'Side rails', t: 'range', min: 0.4, max: 3, step: 0.05, unit: 'mm', show: (p) => p.backHollow && p.shankStyle === 'classic' },
+      { g: 'Metal saving', k: 'hollowSpan', label: 'Hollow span', t: 'range', min: 40, max: 300, step: 5, unit: '°', show: (p) => p.backHollow && p.shankStyle === 'classic' },
+    ],
+  },
+  pendant: {
+    defaults: { metal: '18ky', style: 'contemporary', targetWeight: 0, ...PENDANT_DEFAULTS },
+    fields: [
+      ...COMMON,
+      { g: 'Body', k: 'shape', label: 'Outline', t: 'select', opts: { circle: 'Circle', oval: 'Oval', teardrop: 'Teardrop', heart: 'Heart', cushion: 'Cushion', hexagon: 'Hexagon', shield: 'Shield', star: 'Star', crescent: 'Crescent', cross: 'Cross', 'gothic-cross': 'Gothic cross', custom: 'Custom SVG (upload)' } },
+      { g: 'Body', k: 'height', label: 'Height', t: 'range', min: 6, max: 70, step: 0.5, unit: 'mm' },
+      { g: 'Body', k: 'width', label: 'Width', t: 'range', min: 5, max: 60, step: 0.5, unit: 'mm' },
+      { g: 'Body', k: 'thickness', label: 'Thickness', t: 'range', min: 0.6, max: 6, step: 0.05, unit: 'mm' },
+      { g: 'Body', k: 'bevel', label: 'Edge round', t: 'range', min: 0, max: 1.5, step: 0.05, unit: 'mm' },
+      { g: 'Bail', k: 'bail', label: 'Bail', t: 'select', opts: { loop: 'Loop', jumpring: 'Loop + jump ring', hidden: 'Hidden (back)', none: 'None' } },
+      { g: 'Bail', k: 'bailInner', label: 'Bail opening', t: 'range', min: 1.5, max: 8, step: 0.1, unit: 'mm', show: not('bail', 'none') },
+      { g: 'Bail', k: 'bailWire', label: 'Bail wire', t: 'range', min: 0.6, max: 2.5, step: 0.05, unit: 'mm', show: not('bail', 'none') },
+      ...STONE(),
+      { g: 'Center stone', k: 'stoneY', label: 'Stone vertical offset', t: 'range', min: -20, max: 20, step: 0.25, unit: 'mm', show: not('headType', 'none') },
+      { g: 'Openwork', k: 'openwork', label: 'Openwork', t: 'select', opts: { none: 'None', circle: 'Circles', hex: 'Honeycomb', diamond: 'Diamonds', quatrefoil: 'Quatrefoil', arch: 'Gothic lancets' } },
+      { g: 'Openwork', k: 'openSize', label: 'Hole size', t: 'range', min: 0.5, max: 6, step: 0.05, unit: 'mm', show: not('openwork', 'none') },
+      { g: 'Openwork', k: 'openBridge', label: 'Bridge width', t: 'range', min: 0.3, max: 3, step: 0.05, unit: 'mm', show: not('openwork', 'none') },
+      { g: 'Openwork', k: 'rim', label: 'Solid rim', t: 'range', min: 0.6, max: 5, step: 0.05, unit: 'mm' },
+      { g: 'Ornament', k: 'spikes', label: 'Perimeter spikes', t: 'range', min: 0, max: 48, step: 1 },
+      { g: 'Ornament', k: 'spikeLen', label: 'Spike length', t: 'range', min: 0.5, max: 6, step: 0.05, unit: 'mm', show: (p) => p.spikes > 0 },
+      { g: 'Ornament', k: 'spikeBase', label: 'Spike base Ø', t: 'range', min: 0.5, max: 3, step: 0.05, unit: 'mm', show: (p) => p.spikes > 0 },
+      { g: 'Ornament', k: 'coils', label: 'Curling coils', t: 'range', min: 0, max: 8, step: 1 },
+      { g: 'Ornament', k: 'milgrain', label: 'Milgrain rim', t: 'check' },
+      { g: 'Metal saving', k: 'backHollow', label: 'Hollow back', t: 'check' },
+      { g: 'Metal saving', k: 'frontWall', label: 'Front wall', t: 'range', min: 0.4, max: 3, step: 0.05, unit: 'mm', show: (p) => p.backHollow },
+    ],
+  },
+  earring: {
+    defaults: { metal: '14ky', style: 'classic', targetWeight: 0, ...EARRING_DEFAULTS },
+    fields: [
+      ...COMMON.filter((f) => f.k !== 'style'),
+      { g: 'Type', k: 'earType', label: 'Earring type', t: 'select', opts: { stud: 'Stud', hoop: 'Hoop', drop: 'Drop (ear wire)' } },
+      { g: 'Type', k: 'pair', label: 'Weigh as pair', t: 'check' },
+      ...STONE((p) => p.earType !== 'hoop').map((f) => (f.k === 'headType' ? { ...f, show: not('earType', 'hoop') } : f)),
+      { g: 'Findings', k: 'postDia', label: 'Post / wire Ø', t: 'range', min: 0.6, max: 1.2, step: 0.01, unit: 'mm' },
+      { g: 'Findings', k: 'postLen', label: 'Post length', t: 'range', min: 6, max: 14, step: 0.5, unit: 'mm', show: has('earType', 'stud') },
+      { g: 'Hoop', k: 'hoopDia', label: 'Outer Ø', t: 'range', min: 8, max: 60, step: 0.5, unit: 'mm', show: has('earType', 'hoop') },
+      { g: 'Hoop', k: 'hoopWidth', label: 'Width', t: 'range', min: 1, max: 8, step: 0.05, unit: 'mm', show: has('earType', 'hoop') },
+      { g: 'Hoop', k: 'hoopThick', label: 'Thickness', t: 'range', min: 0.8, max: 4, step: 0.05, unit: 'mm', show: has('earType', 'hoop') },
+      { g: 'Hoop', k: 'profile', label: 'Profile', t: 'select', opts: profileOpts, show: has('earType', 'hoop') },
+      { g: 'Hoop', k: 'texture', label: 'Texture', t: 'select', opts: { none: 'Polished', hammered: 'Hammered' }, show: has('earType', 'hoop') },
+      { g: 'Hoop', k: 'hingeClearance', label: 'Hinge clearance', t: 'range', min: 0, max: 0.4, step: 0.01, unit: 'mm', show: has('earType', 'hoop') },
+      { g: 'Drop', k: 'dropShape', label: 'Drop outline', t: 'select', opts: { teardrop: 'Teardrop', circle: 'Circle', oval: 'Oval', heart: 'Heart', 'gothic-cross': 'Gothic cross', star: 'Star' }, show: has('earType', 'drop') },
+      { g: 'Drop', k: 'dropHeight', label: 'Height', t: 'range', min: 6, max: 40, step: 0.5, unit: 'mm', show: has('earType', 'drop') },
+      { g: 'Drop', k: 'dropWidth', label: 'Width', t: 'range', min: 4, max: 30, step: 0.5, unit: 'mm', show: has('earType', 'drop') },
+      { g: 'Drop', k: 'dropThick', label: 'Thickness', t: 'range', min: 0.6, max: 3, step: 0.05, unit: 'mm', show: has('earType', 'drop') },
+      { g: 'Drop', k: 'spikes', label: 'Perimeter spikes', t: 'range', min: 0, max: 30, step: 1, show: has('earType', 'drop') },
+    ],
+  },
+  bangle: {
+    defaults: { metal: '18ky', style: 'classic', targetWeight: 0, ...BANGLE_DEFAULTS },
+    fields: [
+      ...COMMON.filter((f) => f.k !== 'style'),
+      { g: 'Size', k: 'innerW', label: 'Inner width', t: 'range', min: 40, max: 75, step: 0.5, unit: 'mm' },
+      { g: 'Size', k: 'innerH', label: 'Inner height', t: 'range', min: 35, max: 70, step: 0.5, unit: 'mm' },
+      { g: 'Size', k: 'width', label: 'Band width', t: 'range', min: 2, max: 40, step: 0.1, unit: 'mm' },
+      { g: 'Size', k: 'thickness', label: 'Thickness', t: 'range', min: 1, max: 6, step: 0.05, unit: 'mm' },
+      { g: 'Size', k: 'profile', label: 'Profile', t: 'select', opts: profileOpts },
+      { g: 'Surface', k: 'texture', label: 'Texture', t: 'select', opts: { none: 'Polished', hammered: 'Hammered', organic: 'Organic', ridged: 'Ridged', bark: 'Bark' } },
+      { g: 'Surface', k: 'textureDepth', label: 'Texture depth', t: 'range', min: 0.03, max: 0.6, step: 0.01, unit: 'mm', show: not('texture', 'none') },
+      { g: 'Opening', k: 'cuffGap', label: 'Cuff opening (0 = closed)', t: 'range', min: 0, max: 40, step: 0.5, unit: 'mm' },
+      { g: 'Opening', k: 'hinge', label: 'Hinge', t: 'check', show: (p) => !(p.cuffGap > 0) },
+      { g: 'Opening', k: 'hingeClearance', label: 'Hinge clearance', t: 'range', min: 0, max: 0.4, step: 0.01, unit: 'mm', show: (p) => p.hinge && !(p.cuffGap > 0) },
+      { g: 'Ornament', k: 'spikes', label: 'Spikes', t: 'range', min: 0, max: 60, step: 1 },
+      { g: 'Ornament', k: 'spikeLen', label: 'Spike length', t: 'range', min: 0.5, max: 8, step: 0.1, unit: 'mm', show: (p) => p.spikes > 0 },
+      { g: 'Ornament', k: 'spikeBase', label: 'Spike base Ø', t: 'range', min: 0.6, max: 4, step: 0.05, unit: 'mm', show: (p) => p.spikes > 0 },
+      { g: 'Metal saving', k: 'backHollow', label: 'Hollow inside', t: 'check' },
+      { g: 'Metal saving', k: 'hollowDepth', label: 'Hollow depth', t: 'range', min: 0.05, max: 4, step: 0.05, unit: 'mm', show: (p) => p.backHollow },
+      { g: 'Metal saving', k: 'hollowRail', label: 'Side rails', t: 'range', min: 0.5, max: 4, step: 0.05, unit: 'mm', show: (p) => p.backHollow },
+    ],
+  },
+  chain: {
+    defaults: { metal: '18ky', style: 'classic', targetWeight: 0, ...CHAIN_DEFAULTS },
+    fields: [
+      ...COMMON.filter((f) => f.k !== 'style'),
+      { g: 'Chain', k: 'linkType', label: 'Link type', t: 'select', opts: { cable: 'Cable', rolo: 'Rolo (round)', curb: 'Curb', figaro: 'Figaro 3+1' } },
+      { g: 'Chain', k: 'wireDia', label: 'Wire Ø', t: 'range', min: 0.3, max: 3, step: 0.05, unit: 'mm' },
+      { g: 'Chain', k: 'linkInnerL', label: 'Link inner length', t: 'range', min: 1, max: 12, step: 0.1, unit: 'mm' },
+      { g: 'Chain', k: 'linkInnerW', label: 'Link inner width', t: 'range', min: 0.8, max: 8, step: 0.1, unit: 'mm' },
+      { g: 'Chain', k: 'lengthCm', label: 'Length', t: 'range', min: 14, max: 90, step: 0.5, unit: 'cm' },
+      { g: 'Chain', k: 'claspWeight', label: 'Clasp weight (14K equiv.)', t: 'range', min: 0, max: 3, step: 0.05, unit: 'g' },
+    ],
+  },
+};

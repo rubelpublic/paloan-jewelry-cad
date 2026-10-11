@@ -1,0 +1,587 @@
+// Paloan Jewelry CAD Master — app controller.
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { STLExporter } from 'three/addons/exporters/STLExporter.js';
+import { OBJExporter } from 'three/addons/exporters/OBJExporter.js';
+import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
+import { SVGLoader } from 'three/addons/loaders/SVGLoader.js';
+import { METALS, GEMS, STYLE_NOTES, usToEu, usToUk, usToIndia } from './data.js';
+import { SCHEMAS } from './schema.js';
+import { STYLE_PRESETS, TEMPLATES } from './presets.js';
+import { generate, measure } from './engine.js';
+import { validate } from './validate.js';
+import { optimizeWeight } from './optimize.js';
+import { merge, resample } from './geom/util.js';
+import { parseBrief } from './brief.js';
+import { askClaude, aiSettings, MODELS, fileToImage, resetConversation } from './ai.js';
+import { loadMeshFile, guessUnit, analyzeMesh, reportMarkdown } from './analyzer.js';
+import { rhinoScript, workflow, workflowHtml, workflowMd } from './rhino.js';
+
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const f = (n, d = 2) => (Number.isFinite(n) ? n.toFixed(d) : '—');
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const store = { get: (k, d) => { try { const v = localStorage.getItem(k); return v === null ? d : JSON.parse(v); } catch { return d; } }, set: (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* ignore */ } } };
+
+const S = { type: 'ring', params: {}, model: null, m: null, v: null, hidden: new Set(), mesh: null, meshReport: null, mode: 'design', images: [], zoneColors: true, section: false, wire: false, showStones: true, showDims: true };
+
+/* ============================== VIEWER ============================== */
+const canvas = $('#c3d');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, preserveDrawingBuffer: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.05;
+renderer.localClippingEnabled = true;
+const scene = new THREE.Scene();
+const pmrem = new THREE.PMREMGenerator(renderer);
+scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+const camera = new THREE.PerspectiveCamera(32, 1, 0.1, 5000);
+camera.position.set(28, 22, 42);
+const controls = new OrbitControls(camera, canvas);
+controls.enableDamping = true;
+const key = new THREE.DirectionalLight(0xffffff, 1.4); key.position.set(30, 50, 40); scene.add(key);
+scene.add(new THREE.HemisphereLight(0xffffff, 0x222233, 0.5));
+const grid = new THREE.GridHelper(100, 100, 0x3a3f4a, 0x23262d); grid.material.transparent = true; grid.material.opacity = 0.55; scene.add(grid);
+const root = new THREE.Group(); scene.add(root);
+const dimsBox = new THREE.Box3Helper(new THREE.Box3(), 0x6aa8ff); dimsBox.material.transparent = true; dimsBox.material.opacity = 0.5; scene.add(dimsBox);
+const clipPlane = new THREE.Plane(new THREE.Vector3(0, 0, -1), 0);
+
+const metalMats = {}, stoneMats = {};
+function metalMat(k) {
+  if (!metalMats[k]) { const m = METALS[k] || METALS['18ky']; metalMats[k] = new THREE.MeshPhysicalMaterial({ color: m.color, metalness: 1, roughness: m.rough, clearcoat: 0.3, clearcoatRoughness: 0.2, side: THREE.DoubleSide }); }
+  return metalMats[k];
+}
+function stoneMat(k) {
+  if (!stoneMats[k]) { const g = GEMS[k] || GEMS.diamond; stoneMats[k] = new THREE.MeshPhysicalMaterial({ color: g.color, metalness: 0, roughness: 0, transmission: k === 'onyx' ? 0 : 0.92, thickness: 2, ior: Math.min(g.ior, 2.333), specularIntensity: 1, envMapIntensity: 2.2, flatShading: true }); }
+  return stoneMats[k];
+}
+const zoneMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.5, metalness: 0.1, side: THREE.DoubleSide });
+const plainMat = new THREE.MeshPhysicalMaterial({ color: 0xc9c6bd, metalness: 0.6, roughness: 0.35, side: THREE.DoubleSide });
+
+function resize() {
+  const r = canvas.parentElement.getBoundingClientRect();
+  renderer.setSize(r.width, r.height, false);
+  camera.aspect = r.width / Math.max(1, r.height); camera.updateProjectionMatrix();
+}
+new ResizeObserver(resize).observe(canvas.parentElement);
+(function loop() { controls.update(); renderer.render(scene, camera); requestAnimationFrame(loop); })();
+
+let fitted = null;
+function fitView(view = 'iso', force = false) {
+  const box = new THREE.Box3().setFromObject(root);
+  if (box.isEmpty()) return;
+  const c = box.getCenter(new THREE.Vector3()), s = box.getSize(new THREE.Vector3()).length();
+  const d = s * 1.55 + 4;
+  const dirs = { iso: [0.55, 0.42, 0.9], front: [0, 0, 1], top: [0, 1, 0.0001], side: [1, 0, 0] };
+  const v = new THREE.Vector3(...dirs[view]).normalize();
+  controls.target.copy(c);
+  camera.position.copy(c).addScaledVector(v, d);
+  camera.near = d / 100; camera.far = d * 20; camera.updateProjectionMatrix();
+  grid.position.y = box.min.y - 0.01;
+  fitted = force ? null : fitted;
+}
+
+function applyMaterials() {
+  root.traverse((o) => {
+    if (!o.isMesh) return;
+    o.material.wireframe = S.wire;
+    o.material.clippingPlanes = S.section ? [clipPlane] : [];
+    o.material.needsUpdate = true;
+  });
+}
+
+/* ============================== DESIGN STATE ============================== */
+function defaultsFor(type) { return structuredClone(SCHEMAS[type].defaults); }
+function setType(type, params = null) {
+  S.type = type;
+  S.params = { ...defaultsFor(type), ...(params || {}) };
+  $('#selType').value = type;
+  renderForm();
+  rebuild(true);
+}
+
+function renderForm() {
+  const form = $('#params');
+  const sch = SCHEMAS[S.type];
+  const open = store.get('pjc.openGroups', ['Material', 'Shank', 'Center stone', 'Body', 'Type', 'Size', 'Chain', 'Hoop', 'Drop']);
+  const groups = {};
+  for (const fd of sch.fields) (groups[fd.g] ||= []).push(fd);
+  form.innerHTML = '';
+  for (const [g, fields] of Object.entries(groups)) {
+    const fs = document.createElement('fieldset');
+    if (!open.includes(g)) fs.classList.add('collapsed');
+    fs.innerHTML = `<legend>${g}</legend>`;
+    fs.querySelector('legend').onclick = () => {
+      fs.classList.toggle('collapsed');
+      const now = $$('#params fieldset').filter((x) => !x.classList.contains('collapsed')).map((x) => x.querySelector('legend').textContent);
+      store.set('pjc.openGroups', now);
+    };
+    for (const fd of fields) fs.appendChild(fieldEl(fd));
+    form.appendChild(fs);
+  }
+  refreshVisibility();
+  $('#styleNote').textContent = S.params.style ? STYLE_NOTES[S.params.style] || '' : '';
+  $('#svgUpload').classList.toggle('hidden', !(S.type === 'pendant' && S.params.shape === 'custom'));
+}
+
+function fieldEl(fd) {
+  const d = document.createElement('div');
+  d.dataset.k = fd.k;
+  const v = S.params[fd.k];
+  if (fd.t === 'select') {
+    d.className = 'f sel';
+    d.innerHTML = `<span>${fd.label}</span><select>${Object.entries(fd.opts).map(([k, l]) => `<option value="${k}"${String(v) === k ? ' selected' : ''}>${esc(l)}</option>`).join('')}</select>`;
+    d.querySelector('select').onchange = (e) => onParam(fd.k, e.target.value);
+  } else if (fd.t === 'check') {
+    d.className = 'f chk';
+    d.innerHTML = `<label><input type="checkbox"${v ? ' checked' : ''}/> ${fd.label}</label>`;
+    d.querySelector('input').onchange = (e) => onParam(fd.k, e.target.checked);
+  } else if (fd.t === 'number') {
+    d.className = 'f';
+    d.innerHTML = `<span>${fd.label}</span><input type="number" min="${fd.min}" max="${fd.max}" step="${fd.step}" value="${v ?? 0}" style="grid-column:1/-1">`;
+    d.querySelector('input').onchange = (e) => onParam(fd.k, parseFloat(e.target.value) || 0);
+  } else {
+    d.className = 'f';
+    d.innerHTML = `<span>${fd.label}<em class="muted">${fd.unit || ''}</em></span><input type="range" min="${fd.min}" max="${fd.max}" step="${fd.step}" value="${v}"><input type="number" min="${fd.min}" max="${fd.max}" step="${fd.step}" value="${v}">`;
+    const [r, n] = d.querySelectorAll('input');
+    r.oninput = () => { n.value = r.value; onParam(fd.k, parseFloat(r.value), true); };
+    r.onchange = () => onParam(fd.k, parseFloat(r.value));
+    n.onchange = () => { r.value = n.value; onParam(fd.k, parseFloat(n.value)); };
+  }
+  return d;
+}
+function refreshVisibility() {
+  for (const fd of SCHEMAS[S.type].fields) {
+    const el = $(`#params [data-k="${fd.k}"]`);
+    if (el) el.classList.toggle('hidden', fd.show ? !fd.show(S.params) : false);
+  }
+}
+function syncForm() {
+  for (const fd of SCHEMAS[S.type].fields) {
+    const el = $(`#params [data-k="${fd.k}"]`); if (!el) continue;
+    const v = S.params[fd.k];
+    if (fd.t === 'check') el.querySelector('input').checked = !!v;
+    else el.querySelectorAll('input,select').forEach((i) => { i.value = v; });
+  }
+  refreshVisibility();
+  $('#styleNote').textContent = S.params.style ? STYLE_NOTES[S.params.style] || '' : '';
+}
+
+function onParam(k, v, dragging = false) {
+  S.params[k] = v;
+  if (k === 'style' && STYLE_PRESETS[S.type]?.[v]) { Object.assign(S.params, STYLE_PRESETS[S.type][v]); syncForm(); }
+  if (k === 'metal') store.set('pjc.metal', v);
+  if (k === 'shape') $('#svgUpload').classList.toggle('hidden', v !== 'custom');
+  refreshVisibility();
+  rebuild(false, dragging);
+}
+
+/* ============================== BUILD ============================== */
+let fullTimer = 0, quickTimer = 0, buildId = 0, fullDone = 0;
+function rebuild(fit = false, dragging = false) {
+  const id = ++buildId;
+  clearTimeout(quickTimer);
+  quickTimer = setTimeout(() => {
+    if (id !== buildId || fullDone === id) return;          // a newer or finished build already owns the viewport
+    try { show(generate(S.type, S.params, { csg: false })); if (fit) fitView(); }
+    catch (e) { console.error(e); toast('Build error: ' + e.message); }
+  }, 0);
+  clearTimeout(fullTimer);
+  $('#busy').classList.add('on');
+  fullTimer = setTimeout(() => {
+    if (id !== buildId) return;
+    try {
+      const model = generate(S.type, S.params, { csg: true });
+      const m = measure(model, S.params.metal);
+      if (id !== buildId) return;
+      S.model = model; S.m = m; S.v = validate(model, m, S.params, S.params.metal);
+      fullDone = id;
+      show(model); if (fit) fitView(); renderAnalysis(); renderWorkflow(); renderReport();
+      saveHash();
+    } catch (e) { console.error(e); toast('Build error: ' + e.message); }
+    $('#busy').classList.remove('on');
+  }, dragging ? 650 : 220);
+}
+
+function show(model) {
+  if (S.mode === 'mesh') return;
+  disposeRoot();
+  for (const part of model.parts) {
+    const geo = part.pieces.length === 1 ? part.pieces[0] : merge(part.pieces, part.kind === 'stone' ? 0.01 : 0.6);
+    if (!geo) continue;
+    const mat = part.kind === 'stone' ? stoneMat(part.gem) : metalMat(S.params.metal);
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.name = part.name; mesh.userData.kind = part.kind;
+    mesh.visible = !S.hidden.has(part.name) && (part.kind !== 'stone' || S.showStones);
+    root.add(mesh);
+  }
+  applyMaterials();
+  const box = new THREE.Box3().setFromObject(root);
+  dimsBox.box.copy(box); dimsBox.visible = S.showDims && !box.isEmpty();
+  grid.position.y = box.min.y - 0.01;
+  updateHud(model, box);
+}
+function disposeRoot() { while (root.children.length) { const c = root.children.pop(); if (c.geometry && !c.userData.keepGeo) c.geometry.dispose?.(); } }
+
+function updateHud(model, box) {
+  const s = box.getSize(new THREE.Vector3()), meta = model.meta;
+  const L = [`W ${f(s.x)} × H ${f(s.y)} × D ${f(s.z)} mm`];
+  if (meta.type === 'ring') L.push(`Inner Ø ${f(meta.innerDiameter)} mm · US ${meta.ringSize} · UK ${usToUk(meta.ringSize)} · EU ${f(usToEu(meta.ringSize), 1)} · IN ${usToIndia(meta.ringSize)}`);
+  if (meta.stone) L.push(`Stone ${f(meta.stone.L)} × ${f(meta.stone.W)} mm${meta.headHeight ? ` · head height ${f(meta.headHeight)} mm` : ''}`);
+  if (meta.type === 'chain') L.push(`${meta.linkCount} links · ${f(meta.lengthMm / 10, 1)} cm`);
+  $('#hud').innerHTML = L.map(esc).join('<br>');
+}
+
+/* ============================== ANALYSIS UI ============================== */
+function renderAnalysis() {
+  const { m, v, model } = S;
+  const metal = METALS[S.params.metal];
+  $('#wGrams').textContent = f(m.grams);
+  $('#wMetal').textContent = `${metal.label}${m.pair ? ' · pair' : ''}`;
+  const price = parseFloat($('#priceG').value);
+  const kv = [
+    ['Metal volume', `${f(m.volume, 1)} mm³`],
+    ['Cast weight (+4%)', `${f(m.grams * 1.04)} g`],
+    ['Resin / wax model', `${f(m.volume / 1000 * 1.1, 2)} g`],
+    ['Surface area', `${f(m.area / 100, 1)} cm²`],
+    m.stoneCt ? ['Stones (total)', `${f(m.stoneCt, 2)} ct`] : null,
+    ['Bounding box', `${f(m.bbox.x, 1)} × ${f(m.bbox.y, 1)} × ${f(m.bbox.z, 1)} mm`],
+    S.params.targetWeight > 0 ? ['Target', `${f(S.params.targetWeight)} g (${m.grams > S.params.targetWeight ? '+' : ''}${f(m.grams - S.params.targetWeight)} g)`] : null,
+    price > 0 ? ['Metal cost', `${f(m.grams * 1.04 * price, 0)} ${esc($('#currency').value)}`] : null,
+  ].filter(Boolean);
+  $('#wKv').innerHTML = kv.map(([a, b]) => `<b>${a}</b><span>${b}</span>`).join('');
+  $('#alloys').innerHTML = Object.entries(METALS).map(([k, mt]) => `<tr class="${k === S.params.metal ? 'cur' : ''}"><td>${mt.label}</td><td>${f(m.volume * mt.density / 1000 * (m.pair ? 2 : 1))} g</td></tr>`).join('');
+  const sc = $('#score'); sc.textContent = `${v.score}/100`; sc.style.color = v.score >= 85 ? 'var(--pass)' : v.score >= 60 ? 'var(--warn)' : 'var(--fail)';
+  const order = { fail: 0, warn: 1, pass: 2, info: 3 };
+  $('#checks').innerHTML = [...v.checks].sort((a, b) => order[a.level] - order[b.level]).map((c) => `<li class="${c.level}"><b>${esc(c.title)}</b>${esc(c.detail)}${c.fix ? `<div class="fix">→ ${esc(c.fix)}</div>` : ''}</li>`).join('');
+  $('#parts').innerHTML = m.parts.map((p) => `<li class="${S.hidden.has(p.name) ? 'off' : ''}" data-n="${esc(p.name)}"><span class="eye" title="Show/hide">${S.hidden.has(p.name) ? '○' : '●'}</span><i class="sw" style="background:${p.kind === 'stone' ? '#bfe3ff' : '#' + metal.color.toString(16).padStart(6, '0')}"></i><span class="nm">${esc(p.name)}<br><span class="ly">${esc(p.layer)}</span></span><span class="small">${p.kind === 'metal' ? f(p.volume, 0) + ' mm³' : ''}</span></li>`).join('');
+  $$('#parts li').forEach((li) => { li.querySelector('.eye').onclick = () => { const n = li.dataset.n; S.hidden.has(n) ? S.hidden.delete(n) : S.hidden.add(n); show(model); renderAnalysis(); }; });
+}
+
+function renderWorkflow() { if (S.model) $('#workflow').innerHTML = workflowHtml(workflow(S.type, S.params, S.model.meta)); }
+
+/* ============================== REPORT ============================== */
+function reportText() {
+  const { m, v, model } = S; const p = S.params, meta = model.meta;
+  const metal = METALS[p.metal];
+  const price = parseFloat($('#priceG').value);
+  const L = [`# Paloan production sheet — ${S.type}${p.style ? ` (${p.style})` : ''}`, '', `Generated ${new Date().toLocaleString()} with Paloan Jewelry CAD Master.`, ''];
+  L.push('## Summary', '', '| Item | Value |', '|---|---|');
+  L.push(`| Metal | ${metal.label} |`, `| Finished weight | **${f(m.grams)} g**${m.pair ? ' (pair)' : ''} |`, `| Cast weight (+4%) | ${f(m.grams * 1.04)} g |`, `| Metal volume | ${f(m.volume, 1)} mm³ |`, `| Bounding box | ${f(m.bbox.x)} × ${f(m.bbox.y)} × ${f(m.bbox.z)} mm |`);
+  if (meta.type === 'ring') L.push(`| Ring size | US ${p.ringSize} · UK ${usToUk(p.ringSize)} · EU ${f(usToEu(p.ringSize), 1)} · Ø ${f(meta.innerDiameter)} mm |`, `| Band | ${f(p.widthTop)}→${f(p.widthBottom)} mm wide, ${f(p.thickTop)}→${f(p.thickBottom)} mm thick, ${p.profile} profile, ${p.shankStyle} |`);
+  if (meta.stone) L.push(`| Centre stone | ${meta.stone.cut} ${f(meta.stone.L)} × ${f(meta.stone.W)} mm, ${f(meta.stone.carat)} ct ${meta.stone.gem}, ${meta.headType} setting${meta.prongCount ? `, ${meta.prongCount} prongs Ø ${f(meta.prongDia)} mm` : ''} |`);
+  if (meta.haloCount) L.push(`| Halo | ${meta.haloCount} × ${f(meta.haloStone)} mm melee |`);
+  if (meta.accentCount) L.push(`| Pavé | ${meta.accentCount} × ${f(meta.accentSize)} mm |`);
+  if (m.stoneCt) L.push(`| Total stone weight | ${f(m.stoneCt)} ct |`);
+  if (price > 0) L.push(`| Metal cost | ${f(m.grams * 1.04 * price, 2)} ${$('#currency').value} @ ${price}/g |`);
+  L.push('', `## Manufacturability — score ${v.score}/100`, '');
+  for (const c of v.checks) L.push(`- **[${c.level.toUpperCase()}] ${c.title}** — ${c.detail}${c.fix ? ` _Fix: ${c.fix}_` : ''}`);
+  L.push('', '## Weight in other alloys', '', '| Alloy | g |', '|---|---|');
+  for (const [k, mt] of Object.entries(METALS)) L.push(`| ${mt.label} | ${f(m.volume * mt.density / 1000 * (m.pair ? 2 : 1))} |`);
+  L.push('', '## Components (detachable polysurfaces)', '', '| Part | Layer | Volume mm³ |', '|---|---|---|');
+  for (const pt of m.parts) L.push(`| ${pt.name} | ${pt.layer} | ${pt.kind === 'metal' ? f(pt.volume, 1) : 'stone'} |`);
+  L.push('', '## CAD construction plan', '', workflowMd(workflow(S.type, p, meta)));
+  L.push('', '## Parameters', '', '```json', JSON.stringify({ type: S.type, ...p, customOutline: p.customOutline ? '[custom]' : undefined }, null, 2), '```');
+  return L.join('\n');
+}
+function renderReport() { if (S.model && S.mode !== 'mesh') $('#reportView').innerHTML = `<div class="md">${md(reportText())}</div>`; }
+
+/* ============================== MARKDOWN (small, safe) ============================== */
+function md(src) {
+  const lines = String(src).replace(/\r/g, '').split('\n');
+  let html = '', inCode = false, list = null, table = null;
+  const inline = (s) => esc(s).replace(/`([^`]+)`/g, '<code>$1</code>').replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>').replace(/(^|\W)_([^_]+)_(?=\W|$)/g, '$1<i>$2</i>').replace(/\*([^*\s][^*]*)\*/g, '<i>$1</i>');
+  const close = () => { if (list) { html += `</${list}>`; list = null; } if (table) { html += '</table>'; table = null; } };
+  for (const ln of lines) {
+    if (ln.startsWith('```')) { if (inCode) { html += '</code></pre>'; inCode = false; } else { close(); html += '<pre><code>'; inCode = true; } continue; }
+    if (inCode) { html += esc(ln) + '\n'; continue; }
+    let mm;
+    if ((mm = ln.match(/^(#{1,4})\s+(.*)/))) { close(); html += `<h${mm[1].length}>${inline(mm[2])}</h${mm[1].length}>`; continue; }
+    if (/^\s*\|/.test(ln)) {
+      if (/^\s*\|[\s:|-]+\|\s*$/.test(ln)) continue;
+      if (!table) { close(); html += '<table>'; table = true; }
+      html += '<tr>' + ln.trim().replace(/^\||\|$/g, '').split('|').map((c) => `<td>${inline(c.trim())}</td>`).join('') + '</tr>';
+      continue;
+    }
+    if ((mm = ln.match(/^\s*([-*]|\d+\.)\s+(.*)/))) {
+      const t = /\d/.test(mm[1]) ? 'ol' : 'ul';
+      if (list !== t) { close(); html += `<${t}>`; list = t; }
+      html += `<li>${inline(mm[2])}</li>`; continue;
+    }
+    close();
+    if (ln.trim()) html += `<p>${inline(ln)}</p>`;
+  }
+  close(); if (inCode) html += '</code></pre>';
+  return html;
+}
+
+/* ============================== OPTIMIZER ============================== */
+$('#btnOptimize').onclick = async () => {
+  const target = S.params.targetWeight;
+  if (!(target > 0)) { toast('Set “Target weight” in the Material group first.'); $('#params fieldset')?.classList.remove('collapsed'); return; }
+  const btn = $('#btnOptimize'); btn.disabled = true;
+  $('#busy').classList.add('on');
+  try {
+    const r = await optimizeWeight(S.type, S.params, S.params.metal, target, (t) => { $('#busy').textContent = t; });
+    S.params = r.params; syncForm(); rebuild();
+    showMsg('Weight optimisation', r.log.map((x) => '- ' + x).join('\n'));
+    toast(`${f(r.start)} g → ${f(r.grams)} g`);
+  } catch (e) { console.error(e); toast('Optimiser error: ' + e.message); }
+  $('#busy').textContent = 'Building…'; $('#busy').classList.remove('on'); btn.disabled = false;
+};
+function showMsg(title, body) {
+  const box = document.createElement('div'); box.className = 'card md'; box.innerHTML = `<b>${esc(title)}</b>${md(body)}`;
+  const rp = $('#rightPanel'); rp.insertBefore(box, rp.children[1]);
+  setTimeout(() => box.remove(), 30000);
+}
+
+/* ============================== TABS / TOOLS ============================== */
+$$('.tabs button').forEach((b) => b.onclick = () => setTab(b.dataset.tab));
+function setTab(t) {
+  $$('.tabs button').forEach((x) => x.classList.toggle('on', x.dataset.tab === t));
+  $$('.panel.left section').forEach((x) => x.classList.toggle('on', x.dataset.panel === t));
+  const toMesh = t === 'mesh', wasMesh = S.mode === 'mesh';
+  S.mode = toMesh ? 'mesh' : 'design';
+  if (toMesh && !wasMesh) { disposeRoot(); if (S.mesh) showMesh(); renderMeshPanel(); }
+  if (!toMesh && wasMesh) { $('#rightPanel').innerHTML = rightPanelHtml; bindRight(); if (S.model) { show(S.model); renderAnalysis(); fitView(); } }
+}
+const rightPanelHtml = $('#rightPanel').innerHTML;
+function bindRight() { /* parts toggles are rebound in renderAnalysis */ }
+
+$$('.vp-tools [data-view]').forEach((b) => b.onclick = () => fitView(b.dataset.view));
+$('#tglWire').onclick = (e) => { S.wire = !S.wire; e.currentTarget.classList.toggle('on', S.wire); applyMaterials(); };
+$('#tglSection').onclick = (e) => { S.section = !S.section; e.currentTarget.classList.toggle('on', S.section); applyMaterials(); };
+$('#tglStones').onclick = (e) => { S.showStones = !S.showStones; e.currentTarget.classList.toggle('on', S.showStones); root.children.forEach((c) => { if (c.userData.kind === 'stone') c.visible = S.showStones && !S.hidden.has(c.name); }); };
+$('#tglDims').onclick = (e) => { S.showDims = !S.showDims; e.currentTarget.classList.toggle('on', S.showDims); dimsBox.visible = S.showDims; $('#hud').style.display = S.showDims ? '' : 'none'; };
+$('#fileRef').onchange = (e) => { const fl = e.target.files[0]; if (!fl) return; const img = $('#refOverlay'); img.src = URL.createObjectURL(fl); img.style.display = 'block'; img.style.opacity = $('#refOpacity').value; S.refFile = fl; toast('Reference overlay on — orbit the model to match the view.'); };
+$('#refOpacity').oninput = (e) => { $('#refOverlay').style.opacity = e.target.value; };
+
+$('#selType').onchange = (e) => { S.hidden.clear(); setType(e.target.value, { metal: S.params.metal }); };
+const tsel = $('#selTemplate');
+tsel.innerHTML += TEMPLATES.map((t) => `<option value="${t.id}">${esc(t.label)}</option>`).join('');
+tsel.onchange = () => {
+  const t = TEMPLATES.find((x) => x.id === tsel.value); if (!t) return;
+  const base = { ...defaultsFor(t.type) };
+  if (t.params.style && STYLE_PRESETS[t.type]?.[t.params.style]) Object.assign(base, STYLE_PRESETS[t.type][t.params.style]);
+  S.hidden.clear();
+  setType(t.type, { ...base, ...t.params });
+  tsel.value = '';
+};
+$('#btnReset').onclick = () => setType(S.type, { metal: S.params.metal });
+
+/* custom SVG outline */
+$('#fileSvg').onchange = async (e) => {
+  const fl = e.target.files[0]; if (!fl) return;
+  try {
+    const data = new SVGLoader().parse(await fl.text());
+    const shapes = data.paths.flatMap((p) => SVGLoader.createShapes(p));
+    if (!shapes.length) throw new Error('No closed shapes in SVG');
+    const best = shapes.map((s) => s.getPoints(96)).sort((a, b) => area(b) - area(a))[0];
+    const pts = resample(best.map((v) => [v.x, -v.y]), 160);
+    S.params.customOutline = pts; S.params.shape = 'custom'; syncForm(); rebuild(true);
+    toast('SVG outline loaded — set height/width to scale it.');
+  } catch (err) { toast('SVG error: ' + err.message); }
+};
+const area = (pts) => Math.abs(pts.reduce((s, p, i) => { const q = pts[(i + 1) % pts.length]; return s + p.x * q.y - q.x * p.y; }, 0)) / 2;
+
+/* project save / load / share */
+const projectJson = () => JSON.stringify({ app: 'paloan-jewelry-cad', version: 1, type: S.type, params: S.params }, null, 2);
+$('#btnSaveProj').onclick = () => download(`paloan-${S.type}-${Date.now()}.json`, projectJson(), 'application/json');
+$('#fileProj').onchange = async (e) => {
+  const fl = e.target.files[0]; if (!fl) return;
+  try { const j = JSON.parse(await fl.text()); if (!SCHEMAS[j.type]) throw new Error('Not a Paloan project'); setType(j.type, j.params); toast('Project loaded'); }
+  catch (err) { toast('Open failed: ' + err.message); }
+};
+function saveHash() {
+  try {
+    const p = { ...S.params }; if (p.customOutline) delete p.customOutline;
+    history.replaceState(null, '', '#d=' + btoa(unescape(encodeURIComponent(JSON.stringify({ t: S.type, p })))));
+  } catch { /* ignore */ }
+}
+$('#btnShare').onclick = async () => { saveHash(); try { await navigator.clipboard.writeText(location.href); toast('Share link copied'); } catch { toast('Copy the URL from the address bar'); } };
+
+/* exports */
+function download(name, data, type = 'text/plain') {
+  const url = URL.createObjectURL(data instanceof Blob ? data : new Blob([data], { type }));
+  const a = Object.assign(document.createElement('a'), { href: url, download: name });
+  document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 2000);
+}
+function exportGroup(metalOnly) {
+  const g = new THREE.Group();
+  root.children.forEach((c) => { if (c.isMesh && c.visible && (!metalOnly || c.userData.kind === 'metal')) g.add(new THREE.Mesh(c.geometry, c.material)); });
+  g.rotation.x = Math.PI / 2;                       // Y-up viewer → Z-up CAD/printing convention
+  g.updateMatrixWorld(true);
+  return g;
+}
+const baseName = () => `paloan-${S.type}-${S.params.style || 'custom'}`;
+$('#btnStl').onclick = () => download(baseName() + '-metal.stl', new Blob([new STLExporter().parse(exportGroup(true), { binary: true })]));
+$('#btnStlAll').onclick = () => download(baseName() + '.stl', new Blob([new STLExporter().parse(exportGroup(false), { binary: true })]));
+$('#btnObj').onclick = () => download(baseName() + '.obj', new OBJExporter().parse(exportGroup(false)));
+$('#btnGlb').onclick = () => new GLTFExporter().parse(exportGroup(false), (r) => download(baseName() + '.glb', new Blob([r])), (e) => toast('GLB error ' + e), { binary: true });
+$('#btnRhinoPy').onclick = async () => { try { download(baseName() + '.py', await rhinoScript(S.type, S.params), 'text/x-python'); } catch (e) { toast(e.message); } };
+$('#btnCopyPy').onclick = async () => { try { await navigator.clipboard.writeText(await rhinoScript(S.type, S.params)); toast('Rhino script copied'); } catch (e) { toast(e.message); } };
+$('#btnCopyJson').onclick = async () => { try { await navigator.clipboard.writeText(JSON.stringify({ type: S.type, ...S.params })); toast('Params JSON copied — paste into the GhPython “P” input'); } catch (e) { toast(e.message); } };
+$('#btnReportMd').onclick = () => download(baseName() + '-report.md', reportText(), 'text/markdown');
+$('#btnPrint').onclick = () => { setTab('report'); renderReport(); setTimeout(() => print(), 50); };
+$('#btnShot').onclick = () => { renderer.render(scene, camera); canvas.toBlob((b) => download(baseName() + '.png', b)); };
+['#priceG', '#currency'].forEach((s) => { $(s).value = store.get('pjc' + s, $(s).value); $(s).onchange = () => { store.set('pjc' + s, $(s).value); if (S.m) { renderAnalysis(); renderReport(); } }; });
+
+/* ============================== AI BRIEF ============================== */
+function addMsg(role, html) { const d = document.createElement('div'); d.className = `msg ${role} md`; d.innerHTML = html; $('#aiOut').prepend(d); return d; }
+function applyDesign(type, params, notes = []) {
+  const base = defaultsFor(type);
+  if (params.style && STYLE_PRESETS[type]?.[params.style]) Object.assign(base, STYLE_PRESETS[type][params.style]);
+  S.hidden.clear();
+  setType(type, { ...base, metal: S.params.metal, ...params });
+  setTab('design'); setTab('ai');
+  if (notes.length) toast(notes[0]);
+}
+$('#btnParse').onclick = () => {
+  const txt = $('#brief').value.trim(); if (!txt) return toast('Describe the piece first.');
+  const r = parseBrief(txt);
+  addMsg('user', `<p>${esc(txt)}</p>`);
+  addMsg('bot', md(`**Offline parse → ${r.type}**\n\n${r.summary ? '`' + r.summary + '`' : 'No specific parameters recognised — using defaults.'}\n\n${r.notes.map((n) => '- ' + n).join('\n')}\n\n_For image reading and full engineering reasoning use “Ask Claude”._`));
+  applyDesign(r.type, r.params, r.notes);
+};
+function designContext() {
+  if (!S.model || !S.m) return '';
+  return JSON.stringify({ type: S.type, params: { ...S.params, customOutline: undefined }, measured: { grams: +S.m.grams.toFixed(2), volume_mm3: +S.m.volume.toFixed(1), bbox_mm: S.m.bbox, stones_ct: +S.m.stoneCt.toFixed(2) }, meta: Object.fromEntries(Object.entries(S.model.meta).filter(([k, v]) => typeof v !== 'object' || k === 'stone')), checks: S.v.checks.filter((c) => c.level !== 'info').map((c) => `${c.level}: ${c.title} — ${c.detail}`) }, null, 1);
+}
+async function runAI(prompt, images) {
+  if (!aiSettings.key) { $('#dlgSettings').showModal(); return; }
+  addMsg('user', `<p>${esc(prompt)}</p>${images.length ? `<p class="muted small">${images.length} image(s) attached</p>` : ''}`);
+  const out = addMsg('bot', '<p class="muted">Thinking…</p>');
+  let acc = '';
+  const btns = [$('#btnAsk'), $('#btnReview')]; btns.forEach((b) => b.disabled = true);
+  try {
+    const r = await askClaude({ prompt, images, context: designContext(), onText: (d) => { acc += d; out.innerHTML = md(acc); } });
+    out.innerHTML = md(r.text);
+    if (r.truncated) out.innerHTML += '<p class="muted">(response hit the length limit)</p>';
+    if (r.design) {
+      const b = document.createElement('button'); b.className = 'primary'; b.textContent = `Build this ${r.design.type}`;
+      b.onclick = () => applyDesign(r.design.type, r.design.params);
+      out.appendChild(b);
+      applyDesign(r.design.type, r.design.params);
+    }
+  } catch (e) { out.innerHTML = `<p style="color:var(--fail)">${esc(e.message || e)}</p>`; }
+  btns.forEach((b) => b.disabled = false);
+}
+$('#btnAsk').onclick = () => {
+  const txt = $('#brief').value.trim();
+  if (!txt && !S.images.length) return toast('Describe the piece or add an image.');
+  runAI(txt || 'Convert this jewelry concept image into a manufacturable Rhino NURBS construction plan and build parameters.', S.images.slice());
+};
+$('#btnReview').onclick = async () => {
+  const shot = await new Promise((res) => { renderer.render(scene, camera); canvas.toBlob(res, 'image/png'); });
+  const cur = await fileToImage(new File([shot], 'cad.png', { type: 'image/png' }));
+  const refs = S.images.length ? S.images : S.refFile ? [await fileToImage(S.refFile)] : [];
+  if (!refs.length) return toast('Add a reference image (AI Brief images or the viewport “Ref” overlay) first.');
+  runAI('CAD QUALITY REVIEW. The first image(s) are the reference/design intent, the LAST image is a render of the current CAD model. Compare them: proportions, prong alignment, symmetry, carving/openwork depth and spacing, stone placement, surface consistency. List concrete deviations with numeric corrections and give the corrected parameters JSON.', [...refs, cur]);
+};
+$('#btnChatReset').onclick = () => { resetConversation(); $('#aiOut').innerHTML = ''; toast('New conversation'); };
+function addImages(files) {
+  [...files].filter((x) => x.type.startsWith('image/')).slice(0, 6).forEach(async (fl) => {
+    const im = await fileToImage(fl); S.images.push(im);
+    const fig = document.createElement('figure'); fig.innerHTML = `<img src="data:${im.media_type};base64,${im.data}" alt=""><button title="Remove">×</button>`;
+    fig.querySelector('button').onclick = () => { S.images.splice(S.images.indexOf(im), 1); fig.remove(); };
+    $('#imgThumbs').appendChild(fig);
+  });
+}
+$('#fileImg').onchange = (e) => addImages(e.target.files);
+dropZone($('#dropImg'), addImages);
+
+/* settings */
+$('#aiModel').innerHTML = Object.entries(MODELS).map(([k, l]) => `<option value="${k}">${l}</option>`).join('');
+$('#btnSettings').onclick = () => { $('#apiKey').value = aiSettings.key; $('#aiModel').value = aiSettings.model; $('#dlgSettings').showModal(); };
+$('#btnSaveKey').onclick = () => { aiSettings.set($('#apiKey').value.trim(), $('#rememberKey').checked); aiSettings.model = $('#aiModel').value; toast($('#apiKey').value ? 'Claude enabled' : 'Key cleared'); };
+
+/* ============================== MESH LAB ============================== */
+function dropZone(el, cb) {
+  el.addEventListener('dragover', (e) => { e.preventDefault(); el.classList.add('over'); });
+  el.addEventListener('dragleave', () => el.classList.remove('over'));
+  el.addEventListener('drop', (e) => { e.preventDefault(); el.classList.remove('over'); cb(e.dataTransfer.files); });
+}
+async function loadMesh(files) {
+  const fl = files[0]; if (!fl) return;
+  try {
+    $('#busy').classList.add('on'); $('#busy').textContent = 'Loading mesh…';
+    const geo = await loadMeshFile(fl);
+    const unit = $('#meshUnit').value === 'auto' ? guessUnit(geo) : $('#meshUnit').value;
+    S.mesh = { geo, name: fl.name, unit, analyzed: null };
+    $('#meshUnit').value = unit === 'mm' && $('#meshUnit').value === 'auto' ? 'auto' : unit;
+    $('#btnAnalyze').disabled = false; $('#btnZones').disabled = false;
+    toast(`${fl.name}: ${(geo.attributes.position.count / 3).toLocaleString()} triangles, units → ${unit}`);
+    showMesh(); runMeshAnalysis();
+  } catch (e) { console.error(e); toast('Mesh error: ' + e.message); }
+  $('#busy').classList.remove('on'); $('#busy').textContent = 'Building…';
+}
+$('#fileMesh').onchange = (e) => loadMesh(e.target.files);
+dropZone($('#dropMesh'), loadMesh);
+$('#btnAnalyze').onclick = () => runMeshAnalysis();
+$('#btnZones').onclick = () => { S.zoneColors = !S.zoneColors; showMesh(); };
+function runMeshAnalysis() {
+  if (!S.mesh) return;
+  $('#busy').classList.add('on'); $('#busy').textContent = 'Analysing…';
+  setTimeout(() => {
+    try {
+      const unit = $('#meshUnit').value === 'auto' ? S.mesh.unit : $('#meshUnit').value;
+      const { report, geometry } = analyzeMesh(S.mesh.geo, { unit, metal: S.params.metal || '18ky', minWall: parseFloat($('#meshMinWall').value) || 0.6 });
+      S.mesh.analyzed = geometry; S.meshReport = report; S.mesh.unitUsed = unit;
+      showMesh(); renderMeshPanel(); fitView();
+    } catch (e) { console.error(e); toast('Analysis error: ' + e.message); }
+    $('#busy').classList.remove('on'); $('#busy').textContent = 'Building…';
+  }, 30);
+}
+function showMesh() {
+  if (S.mode !== 'mesh' || !S.mesh) return;
+  disposeRoot();
+  const g = S.mesh.analyzed || S.mesh.geo;
+  if (!g.attributes.normal) g.computeVertexNormals();
+  const mesh = new THREE.Mesh(g, S.zoneColors && g.attributes.color ? zoneMat : plainMat);
+  mesh.userData.keepGeo = true; mesh.userData.kind = 'metal';
+  root.add(mesh);
+  applyMaterials();
+  const box = new THREE.Box3().setFromObject(root);
+  dimsBox.box.copy(box); dimsBox.visible = S.showDims;
+  const s = box.getSize(new THREE.Vector3());
+  $('#hud').innerHTML = `${esc(S.mesh.name)}<br>W ${f(s.x)} × H ${f(s.y)} × D ${f(s.z)} mm`;
+  fitView();
+}
+function renderMeshPanel() {
+  const r = S.meshReport;
+  const rp = $('#rightPanel');
+  if (!r) { rp.innerHTML = '<div class="card"><b>Mesh Lab</b><p class="muted">Load a mesh to see topology, wall thickness, weight, symmetry, ring size and the rebuild plan.</p></div>'; $('#meshPlan').innerHTML = ''; return; }
+  const T = r.topology, G = r.geometry;
+  rp.innerHTML = `
+    <div class="card weight"><div class="big">${f(G.grams)}<small> g</small></div><div class="muted">${METALS[G.metal].label} · ${esc(G.volumeMethod)}</div>
+      <div class="kv"><b>Volume</b><span>${f(G.volume, 1)} mm³</span><b>Bounding box</b><span>${G.bbox.map((x) => f(x, 1)).join(' × ')} mm</span><b>Surface area</b><span>${f(G.area / 100, 1)} cm²</span>
+      ${r.ring ? `<b>Ring size</b><span>Ø ${f(r.ring.innerDiameter)} mm · US ${f(r.ring.usSize, 2)}</span>` : ''}<b>Analysed in</b><span>${f(r.ms, 0)} ms</span></div></div>
+    <div class="card"><div class="card-h"><b>Topology</b><span class="score" style="color:${T.watertight ? 'var(--pass)' : 'var(--fail)'}">${T.watertight ? 'watertight' : 'open'}</span></div>
+      <div class="kv"><b>Triangles</b><span>${T.triangles.toLocaleString()}</span><b>Vertices</b><span>${T.vertices.toLocaleString()}</span><b>Shells</b><span>${T.components}</span><b>Naked edges</b><span>${T.nakedEdges} (${T.holes} holes)</span><b>Non-manifold</b><span>${T.nonManifoldEdges}</span><b>Degenerate faces</b><span>${T.degenerate}</span></div></div>
+    <div class="card"><div class="card-h"><b>Wall thickness</b></div><div class="kv"><b>Minimum</b><span>${f(r.thickness.min)} mm</span><b>5th percentile</b><span>${f(r.thickness.p05)} mm</span><b>Median</b><span>${f(r.thickness.median)} mm</span><b>Below ${r.thickness.minWall} mm</b><span>${f(r.thickness.thinPct, 1)}%</span></div></div>
+    <div class="card"><div class="card-h"><b>Rebuild zones</b></div><div class="kv"><b>Smooth (auto)</b><span>${f(r.zones.smooth, 0)}%</span><b>Detail (manual)</b><span>${f(r.zones.detail, 0)}%</span><b>Thin</b><span>${f(r.zones.thin, 0)}%</span><b>Defects</b><span>${f(r.zones.defect, 0)}%</span><b>Symmetry RMS</b><span>${f(r.symmetry.best.rms, 3)} mm ${r.symmetry.symmetric ? '✓' : ''}</span></div></div>
+    <div class="card"><div class="card-h"><b>Weight in other metals</b></div><table class="alloys">${Object.entries(G.weights).map(([k, w]) => `<tr><td>${METALS[k].label}</td><td>${f(w)} g</td></tr>`).join('')}</table></div>`;
+  const plan = r.recommendations.map((x, i) => `<h4>${i + 1}. ${esc(x.title)}</h4><ul>${x.steps.map((s) => `<li>${esc(s)}</li>`).join('')}</ul>`).join('');
+  $('#meshPlan').innerHTML = `<div class="btnrow"><button id="btnMeshMd" class="primary">Download plan (.md)</button>${r.ring ? '<button id="btnMeshRing">Rebuild as parametric ring</button>' : ''}</div><div class="workflow">${plan}</div>`;
+  $('#btnMeshMd').onclick = () => download(S.mesh.name.replace(/\.\w+$/, '') + '-rebuild-plan.md', reportMarkdown(r, S.mesh.name), 'text/markdown');
+  if (r.ring) $('#btnMeshRing').onclick = () => { setTab('design'); S.hidden.clear(); setType('ring', { ...S.params, ringSize: Math.round(r.ring.usSize * 4) / 4, metal: S.params.metal || '18ky' }); toast(`Ring rebuilt at US ${Math.round(r.ring.usSize * 4) / 4} — now match the head and style.`); };
+}
+
+/* ============================== MISC ============================== */
+let toastT = 0;
+function toast(t) { const el = $('#toast'); el.textContent = t; el.classList.add('on'); clearTimeout(toastT); toastT = setTimeout(() => el.classList.remove('on'), 3200); }
+window.addEventListener('error', (e) => console.error(e.error || e.message));
+
+// boot: from share link, else last metal + classic solitaire
+(function boot() {
+  let t = 'ring', p = { metal: store.get('pjc.metal', '18ky') };
+  const m = location.hash.match(/#d=(.+)/);
+  if (m) { try { const j = JSON.parse(decodeURIComponent(escape(atob(m[1])))); if (SCHEMAS[j.t]) { t = j.t; p = j.p; } } catch { /* ignore */ } }
+  resize();
+  setType(t, p);
+  setTimeout(() => fitView(), 60);
+})();
+
+// expose for debugging / automation
+window.PJC = { S, generate, measure, validate, setType, fitView, root, scene, camera, renderer };

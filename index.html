@@ -1,0 +1,205 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Paloan Jewelry CAD Master</title>
+  <meta name="description" content="Open-source AI jewelry CAD engineer: parametric rings, pendants, earrings, bangles and chains with stone seats, manufacturability checks, gold weight optimisation, mesh-to-NURBS analysis and Rhino / Grasshopper export." />
+  <meta property="og:title" content="Paloan Jewelry CAD Master" />
+  <meta property="og:description" content="AI concept → editable Rhino NURBS → manufacturing-ready jewelry. Free and open source." />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='38' r='18' fill='none' stroke='%23d9b45a' stroke-width='6'/%3E%3Cpath d='M22 14h20l6 7-16 13-16-13z' fill='%23bfe3ff'/%3E%3C/svg%3E" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Cormorant+Garamond:wght@600&display=swap" />
+  <link rel="stylesheet" href="app/css/app.css" />
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/",
+      "three-mesh-bvh": "https://cdn.jsdelivr.net/npm/three-mesh-bvh@0.8.3/build/index.module.js",
+      "three-bvh-csg": "https://cdn.jsdelivr.net/npm/three-bvh-csg@0.0.17/build/index.module.js"
+    }
+  }
+  </script>
+</head>
+<body>
+  <header class="top">
+    <div class="brand">
+      <svg viewBox="0 0 64 64" aria-hidden="true"><circle cx="32" cy="38" r="17" fill="none" stroke="currentColor" stroke-width="5"/><path d="M22 13h20l6 7-16 13-16-13z" fill="#bfe3ff"/></svg>
+      <div><b>Paloan</b> <span>Jewelry CAD Master</span></div>
+    </div>
+    <nav class="tabs" role="tablist">
+      <button data-tab="design" class="on">Design</button>
+      <button data-tab="ai">AI Brief</button>
+      <button data-tab="mesh">Mesh Lab</button>
+      <button data-tab="rhino">Rhino / GH</button>
+      <button data-tab="report">Report</button>
+    </nav>
+    <div class="top-actions">
+      <button id="btnSettings" class="ghost" title="AI settings">⚙ AI</button>
+      <a class="ghost" href="https://github.com/rubelpublic/paloan-jewelry-cad" target="_blank" rel="noopener">GitHub</a>
+    </div>
+  </header>
+
+  <main class="layout">
+    <!-- LEFT: tab panels -->
+    <aside class="panel left">
+      <section data-panel="design" class="on">
+        <div class="row2">
+          <label>Jewelry type
+            <select id="selType">
+              <option value="ring">Ring</option><option value="pendant">Pendant / charm</option><option value="earring">Earrings</option>
+              <option value="bangle">Bangle / cuff</option><option value="chain">Chain</option>
+            </select>
+          </label>
+          <label>Template
+            <select id="selTemplate"><option value="">— start from template —</option></select>
+          </label>
+        </div>
+        <p class="style-note" id="styleNote"></p>
+        <div id="svgUpload" class="hidden">
+          <label class="file">Upload SVG outline<input type="file" id="fileSvg" accept=".svg,image/svg+xml" /></label>
+        </div>
+        <form id="params" autocomplete="off"></form>
+        <div class="btnrow">
+          <button id="btnOptimize" class="primary">Optimize to target weight</button>
+          <button id="btnReset">Reset</button>
+        </div>
+        <div class="btnrow">
+          <button id="btnSaveProj">Save project</button>
+          <label class="file small">Open project<input type="file" id="fileProj" accept=".json" /></label>
+          <button id="btnShare">Copy share link</button>
+        </div>
+      </section>
+
+      <section data-panel="ai">
+        <h3>Concept → CAD</h3>
+        <p class="muted">Describe the piece, or drop AI-generated reference images. The offline parser works instantly; Claude adds full engineering reasoning, reads images and returns buildable parameters.</p>
+        <textarea id="brief" rows="6" placeholder="e.g. Gothic 18K white gold ring, 2 ct oval moissanite, six pointed prongs, 7 mm wide band with lancet openwork and spikes, size 7, target 8 g"></textarea>
+        <label class="drop" id="dropImg">Drop reference images here or <u>browse</u><input type="file" id="fileImg" accept="image/*" multiple /></label>
+        <div id="imgThumbs" class="thumbs"></div>
+        <div class="btnrow">
+          <button id="btnParse">Build offline</button>
+          <button id="btnAsk" class="primary">Ask Claude</button>
+        </div>
+        <div class="btnrow">
+          <button id="btnReview">Review CAD vs reference (AI)</button>
+          <button id="btnChatReset" class="ghost">New conversation</button>
+        </div>
+        <div id="aiOut" class="ai-out"></div>
+      </section>
+
+      <section data-panel="mesh">
+        <h3>Mesh → NURBS reconstruction</h3>
+        <p class="muted">Load an AI-generated or scanned mesh (STL, OBJ, GLB/GLTF, FBX, PLY). Everything runs locally in your browser; nothing is uploaded.</p>
+        <label class="drop" id="dropMesh">Drop a mesh here or <u>browse</u><input type="file" id="fileMesh" accept=".stl,.obj,.glb,.gltf,.fbx,.ply" /></label>
+        <div class="row2">
+          <label>File units <select id="meshUnit"><option value="auto">Auto-detect</option><option value="mm">mm</option><option value="cm">cm</option><option value="m">m</option><option value="in">inch</option></select></label>
+          <label>Min wall (mm) <input id="meshMinWall" type="number" value="0.6" step="0.05" min="0.2" /></label>
+        </div>
+        <div class="btnrow">
+          <button id="btnAnalyze" class="primary" disabled>Analyze mesh</button>
+          <button id="btnZones" disabled>Toggle zone colours</button>
+        </div>
+        <div class="legend">
+          <span><i style="background:#40bf73"></i>Smooth → QuadRemesh/SubD</span>
+          <span><i style="background:#f2a626"></i>Detail → manual rebuild</span>
+          <span><i style="background:#eb3333"></i>Below min wall</span>
+          <span><i style="background:#9e4cf2"></i>Naked / non-manifold</span>
+        </div>
+        <div id="meshPlan"></div>
+      </section>
+
+      <section data-panel="rhino">
+        <h3>Rhino &amp; Grasshopper export</h3>
+        <p class="muted">One Python file rebuilds this exact design as clean NURBS polysurfaces on a layer tree (Metal / Stones / Cutters), with real boolean stone seats. Works in Rhino 7 &amp; 8 and as a GhPython component (input <code>P</code> = JSON, outputs <code>a</code> breps, <code>b</code> report).</p>
+        <div class="btnrow">
+          <button id="btnRhinoPy" class="primary">Download Rhino .py</button>
+          <button id="btnCopyPy">Copy script</button>
+          <button id="btnCopyJson">Copy params JSON</button>
+        </div>
+        <div class="btnrow">
+          <button id="btnStl">Export STL (metal)</button>
+          <button id="btnStlAll">STL (all)</button>
+          <button id="btnObj">OBJ</button>
+          <button id="btnGlb">GLB</button>
+        </div>
+        <h4>Construction workflow</h4>
+        <div id="workflow" class="workflow"></div>
+      </section>
+
+      <section data-panel="report">
+        <h3>Production report</h3>
+        <p class="muted">Specification sheet for the bench, setter and caster: dimensions, metal weights, stones, validation and the CAD construction plan.</p>
+        <div class="row2">
+          <label>Metal price / g <input id="priceG" type="number" step="0.01" min="0" placeholder="e.g. 78" /></label>
+          <label>Currency <input id="currency" type="text" value="USD" maxlength="5" /></label>
+        </div>
+        <div class="btnrow">
+          <button id="btnReportMd" class="primary">Download report (.md)</button>
+          <button id="btnPrint">Print / PDF</button>
+          <button id="btnShot">Render PNG</button>
+        </div>
+        <div id="reportView" class="report-view"></div>
+      </section>
+    </aside>
+
+    <!-- CENTER: viewport -->
+    <section class="viewport" id="viewport">
+      <canvas id="c3d"></canvas>
+      <img id="refOverlay" alt="" />
+      <div class="vp-tools">
+        <button data-view="iso" title="Perspective">3D</button>
+        <button data-view="front" title="Front">F</button>
+        <button data-view="top" title="Top">T</button>
+        <button data-view="side" title="Side">S</button>
+        <span class="sep"></span>
+        <button id="tglWire" title="Wireframe">◇</button>
+        <button id="tglSection" title="Section cut">◐</button>
+        <button id="tglStones" title="Hide stones" class="on">◆</button>
+        <button id="tglDims" title="Dimensions" class="on">⟷</button>
+        <label class="file small" title="Reference image overlay">Ref<input type="file" id="fileRef" accept="image/*" /></label>
+        <input type="range" id="refOpacity" min="0" max="1" step="0.05" value="0.4" title="Overlay opacity" />
+      </div>
+      <div class="hud" id="hud"></div>
+      <div class="busy" id="busy">Building…</div>
+    </section>
+
+    <!-- RIGHT: analysis -->
+    <aside class="panel right" id="rightPanel">
+      <div class="card weight">
+        <div class="big"><span id="wGrams">—</span><small> g</small></div>
+        <div id="wMetal" class="muted"></div>
+        <div class="kv" id="wKv"></div>
+      </div>
+      <div class="card">
+        <div class="card-h"><b>Manufacturability</b><span id="score" class="score">—</span></div>
+        <ul id="checks" class="checks"></ul>
+      </div>
+      <div class="card">
+        <div class="card-h"><b>Parts &amp; layers</b><span class="muted small">editable polysurfaces</span></div>
+        <ul id="parts" class="parts"></ul>
+      </div>
+      <div class="card">
+        <div class="card-h"><b>Weight in other metals</b></div>
+        <table id="alloys" class="alloys"></table>
+      </div>
+    </aside>
+  </main>
+
+  <dialog id="dlgSettings">
+    <form method="dialog">
+      <h3>AI settings</h3>
+      <p class="muted">Paste an Anthropic API key to enable Claude. It is stored only in this browser and sent only to api.anthropic.com. Without a key every other feature still works offline.</p>
+      <label>API key <input id="apiKey" type="password" placeholder="sk-ant-…" autocomplete="off" /></label>
+      <label class="chk"><input type="checkbox" id="rememberKey" /> Remember on this device</label>
+      <label>Model <select id="aiModel"></select></label>
+      <p class="muted small">Server-side refusal fallback is enabled, so a declined request is retried automatically on a fallback model.</p>
+      <div class="btnrow"><button value="cancel">Cancel</button><button id="btnSaveKey" value="ok" class="primary">Save</button></div>
+    </form>
+  </dialog>
+
+  <div id="toast" class="toast"></div>
+  <script type="module" src="app/js/main.js"></script>
+</body>
+</html>

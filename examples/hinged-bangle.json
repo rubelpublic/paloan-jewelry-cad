@@ -1,0 +1,2 @@
+{ "app": "paloan-jewelry-cad", "version": 1, "type": "bangle",
+  "params": { "metal": "18ky", "innerW": 62, "innerH": 54, "width": 6, "thickness": 2.2, "profile": "comfort", "hinge": true, "hingeClearance": 0.1, "backHollow": true, "hollowDepth": 1.0 } }
