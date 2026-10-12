@@ -15,6 +15,10 @@ import { registerFontFile } from './fonts.js';
 import { initImageTab } from './imagetab.js';
 import { initVariations } from './variations.js';
 import { initEditor } from './editor.js';
+import { initGemTab } from './gemtab.js';
+import { initLibraryTab } from './librarytab.js';
+import { summaryHTML, customAlloys, saveCustomAlloys } from './summary.js';
+import { getPart } from './assets.js';
 import { parseEdit } from './aiedit.js';
 import { validate } from './validate.js';
 import { optimizeWeight } from './optimize.js';
@@ -234,7 +238,10 @@ function rebuild(fit = false, dragging = false) {
       const model = generate(S.type, S.params, { csg: true });
       const m = measure(model, S.params.metal);
       if (id !== buildId) return;
-      S.model = model; S.m = m; S.v = validate(model, m, S.params, S.params.metal);
+      S.model = model; S.m = m;
+      gemTab?.afterBuild(model, S.params);
+      S.v = validate(model, m, S.params, S.params.metal);
+      S.gemMapImg = null;
       fullDone = id;
       show(model); if (fit) fitView(); renderAnalysis(); renderWorkflow(); renderReport();
       saveHash();
@@ -261,6 +268,7 @@ function show(model) {
   grid.position.y = box.min.y - 0.01;
   updateHud(model, box);
   editor?.reselect();
+  gemTab?.afterShow();
 }
 function disposeRoot() { while (root.children.length) { const c = root.children.pop(); if (c.geometry && !c.userData.keepGeo) c.geometry.dispose?.(); } }
 
@@ -292,7 +300,12 @@ function renderAnalysis() {
     price > 0 ? ['Metal cost', `${f(m.grams * 1.04 * price, 0)} ${esc($('#currency').value)}`] : null,
   ].filter(Boolean);
   $('#wKv').innerHTML = kv.map(([a, b]) => `<b>${a}</b><span>${b}</span>`).join('');
-  $('#alloys').innerHTML = Object.entries(METALS).map(([k, mt]) => `<tr class="${k === S.params.metal ? 'cur' : ''}"><td>${mt.label}</td><td>${f(m.volume * mt.density / 1000 * (m.pair ? 2 : 1))} g</td></tr>`).join('');
+  const ca = customAlloys();
+  $('#alloys').innerHTML = Object.entries(METALS).map(([k, mt]) => `<tr class="${k === S.params.metal ? 'cur' : ''}"><td>${mt.label}</td><td>${f(m.volume * mt.density / 1000 * (m.pair ? 2 : 1))} g</td></tr>`).join('')
+    + ca.map((c, i) => `<tr><td>${esc(c.name)} <span class="muted small">(${c.density})</span> <button class="small-btn" data-ca="${i}" title="Remove">×</button></td><td>${f(m.volume * c.density / 1000 * (m.pair ? 2 : 1))} g</td></tr>`).join('')
+    + Object.entries({ 'Casting wax': 0.95, 'Castable resin': 1.15 }).map(([n, d]) => `<tr><td class="muted">${n} (model)</td><td class="muted">${f(m.volume * d / 1000 * (m.pair ? 2 : 1))} g</td></tr>`).join('');
+  $('#alloyCount').textContent = `${Object.keys(METALS).length + ca.length} alloys`;
+  $$('#alloys [data-ca]').forEach((b) => b.onclick = () => { const l = customAlloys(); l.splice(+b.dataset.ca, 1); saveCustomAlloys(l); renderAnalysis(); });
   const sc = $('#score'); sc.textContent = `${v.score}/100`; sc.style.color = v.score >= 85 ? 'var(--pass)' : v.score >= 60 ? 'var(--warn)' : 'var(--fail)';
   const order = { fail: 0, warn: 1, pass: 2, info: 3 };
   $('#checks').innerHTML = [...v.checks].sort((a, b) => order[a.level] - order[b.level]).map((c) => `<li class="${c.level}"><b>${esc(c.title)}</b>${esc(c.detail)}${c.fix ? `<div class="fix">→ ${esc(c.fix)}</div>` : ''}</li>`).join('');
@@ -326,7 +339,11 @@ function reportText() {
   L.push('', '## Parameters', '', '```json', JSON.stringify({ type: S.type, ...p, customOutline: p.customOutline ? '[custom]' : undefined }, null, 2), '```');
   return L.join('\n');
 }
-function renderReport() { if (S.model && S.mode !== 'mesh') $('#reportView').innerHTML = `<div class="md">${md(reportText())}</div>`; }
+function renderReport() {
+  if (!S.model || S.mode === 'mesh') return;
+  $('#reportView').innerHTML = `<div class="md">${md(reportText())}</div>`;
+  try { $('#summaryView').innerHTML = summaryHTML({ type: S.type, params: S.params, model: S.model, m: S.m, v: S.v, inv: gemTab?.inventory() || [], gemMap: S.gemMapImg, shot: S.shotImg }); } catch (e) { console.error(e); }
+}
 
 /* ============================== MARKDOWN (small, safe) ============================== */
 function md(src) {
@@ -429,7 +446,11 @@ const area = (pts) => Math.abs(pts.reduce((s, p, i) => { const q = pts[(i + 1) %
 
 /* project save / load / share */
 const usesImage = () => S.type === 'relief' || (S.type === 'ring' && String(S.params.signetFace || '').startsWith('image'));
-const projectJson = () => JSON.stringify({ app: 'paloan-jewelry-cad', version: 2, type: S.type, params: S.params, image: usesImage() ? exportField() : undefined }, null, 2);
+const projectJson = () => {
+  const p = { ...S.params };
+  if (p.inserts?.length) p.inserts = p.inserts.map((ins) => ({ ...ins, embedded: ins.embedded || getPart(ins.id)?.data }));   // portable project files
+  return JSON.stringify({ app: 'paloan-jewelry-cad', version: 3, type: S.type, params: p, image: usesImage() ? exportField() : undefined }, null, 2);
+};
 $('#btnSaveProj').onclick = () => download(`paloan-${S.type}-${Date.now()}.json`, projectJson(), 'application/json');
 $('#fileProj').onchange = async (e) => {
   const fl = e.target.files[0]; if (!fl) return;
@@ -728,6 +749,40 @@ window.addEventListener('error', (e) => console.error(e.error || e.message));
   setType(t, p);
   setTimeout(() => fitView(), 60);
 })();
+
+/* ============================== GEMS / LIBRARY / SUMMARY ============================== */
+let gemTab = null, library = null;
+const commitParams = (patch, msg) => { Object.assign(S.params, patch); pushHistory(); rebuild(); if (msg) toast(msg); };
+function thumbImg(size = 160) {
+  renderer.render(scene, camera);
+  const c = document.createElement('canvas'); c.width = size; c.height = size;
+  const src = renderer.domElement, s = Math.min(src.width, src.height);
+  c.getContext('2d').drawImage(src, (src.width - s) / 2, (src.height - s) / 2, s, s, 0, 0, size, size);
+  return c.toDataURL('image/jpeg', 0.8);
+}
+gemTab = initGemTab({ root, scene, camera, canvas, getParams: () => S.params, getType: () => S.type, generate, commit: commitParams, toast,
+  refresh: () => { if (S.model) show(S.model); }, render: () => renderer.render(scene, camera),
+  saveSetting: (c) => library?.saveSetting(c) });
+library = initLibraryTab({ getState: () => ({ type: S.type, params: S.params }), getParams: () => S.params, commit: commitParams, toast, setTab,
+  openDesign: (t, p) => { S.hidden.clear(); setType(t, p); setTab('design'); },
+  useGemPreset: (p) => gemTab.applyPreset(p), gemCurrent: () => gemTab.current(), thumb: () => thumbImg(),
+  selectedPart: () => { const n = editor?.selectedName(); return n ? S.model?.parts.find((x) => x.name === n) : null; } });
+$('#caAdd').onclick = () => {
+  const name = $('#caName').value.trim(), density = parseFloat($('#caDens').value);
+  if (!name || !(density > 0.5 && density < 25)) return toast('Enter an alloy name and a density between 0.5 and 25 g/cm³.');
+  saveCustomAlloys([...customAlloys(), { name, density }]); $('#caName').value = ''; $('#caDens').value = ''; renderAnalysis(); renderReport();
+};
+$('#btnSummary').onclick = () => {
+  if (!S.model) return;
+  S.shotImg = thumbImg(240);
+  S.gemMapImg = (gemTab.inventory().length ? gemTab.gemMapImage() : null);
+  renderReport(); setTab('report'); toast('Summary updated with gem map');
+};
+$('#btnSummaryHtml').onclick = () => {
+  if (!S.gemMapImg && gemTab.inventory().length) { S.shotImg = thumbImg(240); S.gemMapImg = gemTab.gemMapImage(); renderReport(); }
+  const css = [...document.styleSheets].flatMap((sh) => { try { return [...sh.cssRules].map((r) => r.cssText); } catch { return []; } }).join('\n');
+  download(baseName() + '-summary.html', `<!doctype html><meta charset="utf-8"><title>Paloan design summary</title><style>${css} body{padding:24px;max-width:900px;margin:auto}</style>${$('#summaryView').innerHTML}`, 'text/html');
+};
 
 /* ============================== EDIT MODE + AI EDIT BAR ============================== */
 let editor = null;

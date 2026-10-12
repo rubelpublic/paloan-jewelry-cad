@@ -7,7 +7,10 @@ METALS = {
     "18kw": ("18K White Gold", 15.90), "18kr": ("18K Rose Gold", 15.20), "14ky": ("14K Yellow Gold", 13.10),
     "14kw": ("14K White Gold", 12.60), "14kr": ("14K Rose Gold", 13.00), "10ky": ("10K Yellow Gold", 11.60),
     "pt950": ("Platinum 950", 20.10), "pd950": ("Palladium 950", 12.00), "ag925": ("Sterling Silver 925", 10.36),
-    "brass": ("Brass", 8.50),
+    "brass": ("Brass", 8.50), "9ky": ("9K Yellow Gold", 11.20), "18kwpd": ("18K White Gold (Pd)", 16.00),
+    "pt900": ("Platinum 900", 21.50), "pt999": ("Platinum 999", 21.45), "pd500": ("Palladium 500", 11.40),
+    "ag950": ("Britannia Silver 950", 10.40), "ag935": ("Argentium Silver 935", 10.25), "ti": ("Titanium Gr 5", 4.43),
+    "ss316": ("Stainless Steel 316L", 8.00), "bronze": ("Bronze", 8.80), "cu": ("Copper", 8.96),
 }
 GEMS = {"diamond": 3.52, "labdiamond": 3.52, "moissanite": 3.21, "sapphire": 4.00, "ruby": 4.00, "emerald": 2.72,
         "amethyst": 2.65, "tourmaline": 3.06, "onyx": 2.65, "cz": 5.80}

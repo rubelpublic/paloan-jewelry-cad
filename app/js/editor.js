@@ -99,7 +99,7 @@ export function initEditor({ camera, canvas, scene, root, orbit, getState, commi
   $('#epReset').onclick = () => patch(() => ({}), 'Reset part');
   $('#epResetAll').onclick = () => { commit({ edits: {} }, 'All manual edits cleared'); select(null); };
   $('#epDone').onclick = () => setActive(false);
-  return { reselect, isActive: () => active };
+  return { reselect, isActive: () => active, selectedName: () => selected?.name || null };
 }
 
 /** Apply stored edits to a freshly built model (called by the engine before booleans). */

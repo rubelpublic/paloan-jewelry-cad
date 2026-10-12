@@ -30,6 +30,8 @@
     </div>
     <nav class="tabs" role="tablist">
       <button data-tab="design" class="on">Design</button>
+      <button data-tab="gems">💎 Gems</button>
+      <button data-tab="library">📚 Library</button>
       <button data-tab="image">Image → 3D</button>
       <button data-tab="ai">AI Brief</button>
       <button data-tab="mesh">Mesh Lab</button>
@@ -84,6 +86,54 @@
           <label class="file small">Open project<input type="file" id="fileProj" accept=".json" /></label>
           <button id="btnShare">Copy share link</button>
         </div>
+      </section>
+
+      <section data-panel="gems">
+        <h3>💎 Gem tools</h3>
+        <p class="muted">Create &amp; customise gems, prongs and cutters, then click on the metal to place them — single, in rows or mirrored. Cutters cut real seats into the metal. Compact pavé to an exact gap.</p>
+        <fieldset><legend>Gem</legend>
+          <div class="row2"><label>Cut <select id="gtCut"></select></label><label>Material <select id="gtGem"></select></label></div>
+          <label>Calibrated size <select id="gtLib"></select></label>
+          <div class="row2"><label>Length mm <input id="gtL" type="number" value="1.5" step="0.05" min="0.6" /></label><label>Width mm <input id="gtW" type="number" value="1.5" step="0.05" min="0.6" /></label></div>
+          <div class="row2"><label>Table above metal mm <input id="gtDepth" type="number" value="0.05" step="0.05" /></label><label>Rotation ° <input id="gtRot" type="number" value="0" step="5" /></label></div>
+          <p class="muted small" id="gtCt"></p>
+        </fieldset>
+        <fieldset><legend>Prongs</legend>
+          <div class="row2"><label>Count <select id="gtPCount"><option value="0">None (bead / channel)</option><option value="2">2</option><option value="3">3</option><option value="4" selected>4</option><option value="6">6</option></select></label><label>Tip <select id="gtPTip"><option value="bead">Bead</option><option value="round">Round</option><option value="flat">Flat</option></select></label></div>
+          <div class="row2"><label>Diameter mm <input id="gtPDia" type="number" value="0.45" step="0.05" min="0.2" /></label><label>Height over crown mm <input id="gtPH" type="number" value="0.3" step="0.05" /></label></div>
+          <label>Overlap on girdle mm <input id="gtPOv" type="number" value="0.12" step="0.01" /></label>
+        </fieldset>
+        <fieldset><legend>Cutter</legend>
+          <label class="chk"><input type="checkbox" id="gtCOn" checked /> Cut seat into the metal</label>
+          <div class="row2"><label>Tolerance mm <input id="gtCTol" type="number" value="0.04" step="0.01" min="0" /></label><label>Top extension mm <input id="gtCTop" type="number" value="1.2" step="0.1" /></label></div>
+          <label class="chk"><input type="checkbox" id="gtCHole" checked /> Culet / light hole</label>
+          <div class="row2"><label>Hole Ø (× gem) <input id="gtCHoleR" type="number" value="0.55" step="0.05" min="0.2" max="0.9" /></label><label>Hole depth mm <input id="gtCHoleD" type="number" value="1.6" step="0.1" /></label></div>
+        </fieldset>
+        <fieldset><legend>Place &amp; space</legend>
+          <div class="btnrow"><button id="gtPlace">● Place gems</button><button id="gtRow">⋯ Row (2 clicks)</button></div>
+          <div class="row2"><label>Target gap mm <input id="gtGap" type="number" value="0.15" step="0.01" min="0" /></label><label class="chk" style="margin-top:18px"><input type="checkbox" id="gtMirror" checked /> Mirror X</label></div>
+          <div class="btnrow"><button id="gtCompact" class="primary">⇲ Compact to gap</button><button id="gtResnap">⟲ Re-snap to surface</button></div>
+          <div class="btnrow"><button id="gtApplyAll">Apply settings to all</button><button id="gtUndo">Undo last</button><button id="gtClear">Delete all</button></div>
+        </fieldset>
+        <fieldset><legend>Distances · gem map</legend>
+          <p class="small" id="gtStats"></p>
+          <div class="btnrow"><button id="gtDist">⟷ Show distances</button><button id="gtMap">◉ Gem map view</button></div>
+          <div class="btnrow"><button id="gtMapPng">⬇ Gem map PNG</button><button id="gtSaveAsset">☆ Save setting to Library</button></div>
+          <p class="legend-line small"><i style="background:#ff3030"></i>&lt;0.05 collision <i style="background:#ffa020"></i>&lt;0.1 tight <i style="background:#30d070"></i>0.1–0.3 ok <i style="background:#4aa0ff"></i>&gt;0.3 open</p>
+        </fieldset>
+        <h4>Placed gems</h4>
+        <ul class="gem-list" id="gtList"></ul>
+      </section>
+
+      <section data-panel="library">
+        <h3>📚 Component library</h3>
+        <p class="muted">Your add-on asset manager: gems, prong sets, cutters, gem settings, whole designs and saved parts. Stored in this browser — export to share or back up.</p>
+        <div class="btnrow"><button id="libSaveDesign" class="primary">☆ Save current design</button><button id="libSavePart">☆ Save selected part</button></div>
+        <div class="btnrow"><button id="libSaveGem">☆ Save gem setting</button><button id="libExport">⬇ Export</button><label class="file small">⬆ Import<input type="file" id="libImport" accept=".json" /></label></div>
+        <input id="libSearch" type="text" placeholder="Search the library…" />
+        <div class="chips" id="libCats"></div>
+        <p class="muted small" id="libCount"></p>
+        <div class="lib-grid" id="libGrid"></div>
       </section>
 
       <section data-panel="image">
@@ -210,6 +260,11 @@
           <button id="btnPrint">Print / PDF</button>
           <button id="btnShot">Render PNG</button>
         </div>
+        <div class="btnrow">
+          <button id="btnSummary" class="primary">▤ Summary with gem map</button>
+          <button id="btnSummaryHtml">⬇ Summary (.html)</button>
+        </div>
+        <div id="summaryView"></div>
         <div id="reportView" class="report-view"></div>
       </section>
     </aside>
@@ -237,6 +292,7 @@
         <input type="range" id="refOpacity" min="0" max="1" step="0.05" value="0.4" title="Overlay opacity" />
       </div>
       <div class="hud" id="hud"></div>
+      <div class="gem-legend hidden" id="gemLegend"></div>
       <div class="edit-panel hidden" id="editPanel">
         <b id="epName">Part</b>
         <div class="seg"><button data-tmode="translate" class="on" title="Move (W)">Move</button><button data-tmode="rotate" title="Rotate (E)">Rotate</button><button data-tmode="scale" title="Scale / taper (R)">Scale</button></div>
@@ -268,8 +324,10 @@
         <ul id="parts" class="parts"></ul>
       </div>
       <div class="card">
-        <div class="card-h"><b>Weight in other metals</b></div>
+        <div class="card-h"><b>Weight in alloys</b><span class="muted small" id="alloyCount"></span></div>
         <table id="alloys" class="alloys"></table>
+        <div class="row2 custom-alloy"><input id="caName" type="text" placeholder="Custom alloy" /><input id="caDens" type="number" step="0.01" placeholder="g/cm³" /></div>
+        <button id="caAdd" class="small-btn">+ Add custom alloy</button>
       </div>
     </aside>
   </main>

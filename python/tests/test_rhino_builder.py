@@ -45,6 +45,10 @@ CASES = [
     {"type": "ring", "headType": "half-bezel", "cut": "oval", "carat": 1},
     {"type": "ring", "headType": "prong", "petals": 8, "petalLayers": 2, "petalTip": "round", "prongRotate": 20, "prongHeight": 1.2, "prongTip": 1.3},
     {"type": "pendant", "headType": "collet", "petals": 6, "cut": "round"},
+    {"type": "ring", "headType": "none", "widthTop": 6, "gems": [
+        {"cut": "round", "L": 1.5, "W": 1.5, "gem": "diamond", "p": [0, 10.3, 1.2], "n": [0, 1, 0], "depth": 0.05,
+         "prongs": {"count": 4, "dia": 0.45, "height": 0.3, "tip": "bead"}, "cutter": {"on": True, "tol": 0.04, "top": 1.2, "hole": True, "holeRatio": 0.55, "holeDepth": 1.6}},
+        {"cut": "pear", "L": 3, "W": 2, "gem": "ruby", "p": [2, 10.1, 0], "n": [0.2, 0.98, 0], "rot": 30, "prongs": {"count": 2}, "cutter": {"on": True, "hole": False}}]},
     {"type": "name", "text": "Amelia", "extra": {"outlines": [{"outer": [[0, 0], [5, 0], [5, 5], [0, 5]], "holes": [[[1, 1], [2, 1], [2, 2]]], "z0": -0.6, "z1": 0.6}]}},
 ]
 

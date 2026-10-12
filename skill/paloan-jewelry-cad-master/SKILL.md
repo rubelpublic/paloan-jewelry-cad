@@ -89,6 +89,13 @@ Define the parameter set (with ranges and units), dependency graph (ring size �
 - **Flush / gypsy:** ≥ 0.8–1.0 mm of metal around the girdle, stones ≤ 6 mm. Table just proud of the surface; the setter burnishes metal over the girdle.
 - **Petals (JFR workflow):** draw half the outline and mirror it, draw a cupped cross-section, Sweep2 along the two rails, then lift, curl (Bend/gumball) and ArrayPolar. Inner layers are shorter and more lifted, rotated half a step. Thickness ≥ 0.8 mm, tips ≥ 0.5 mm. For enamel, recess the tops 0.2–0.3 mm (champlevé) and fire after polishing.
 
+### I. Gem layout, cutters and summaries (JewelCraft-style)
+- **Gem object:** calibrated size plus material. Place the table 0–0.1 mm above the metal for pavé and 0.3–0.8 mm for claw accents.
+- **Cutter:** seat tolerance 0.02–0.05 mm per side, top extension ≥ 0.8 mm (clears the burr path), culet hole 50–60 % of the girdle Ø through the metal for light and cleaning.
+- **Spacing:** girdle-to-girdle 0.1–0.2 mm (micro pavé 0.08 mm minimum); collision < 0.05 mm. Compact rows along the surface, never by eye.
+- **Prongs for pavé:** shared beads Ø ≥ 0.35–0.45 mm, 2–4 per stone, overlapping the girdle 0.1–0.15 mm.
+- **Summary:** always report gem counts per size with carat totals, a colour-coded gem map, finished/cast weight in the chosen alloy (plus alternatives), and any open checks.
+
 ### F. CAD quality review (Capability 9)
 Compare against reference/intent: proportions (width/height ratios, head-to-shank), prong alignment & count, symmetry, stone placement/height, carving depth, openwork spacing, surface continuity (G1/G2 at blends), naked edges. Output a defect list: *what — where — measured vs expected — fix*.
 

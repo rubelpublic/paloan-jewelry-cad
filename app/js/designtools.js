@@ -60,6 +60,7 @@ export function autoFixPatch(type, p, meta, checks) {
   if (has('Thin metal around flush stone')) set('flushMargin', 1.0, 'Flush margin');
   if (has('Fine monogram strokes')) set('faceDepth', r2(Math.min(p.faceDepth, 0.4)), 'Monogram depth');
   if (has('Coil wire')) set('coils', 0, 'Fragile coils removed');
+  if (has('Thin placed prongs') && p.gems?.length) { patch.gems = p.gems.map((g) => (g.prongs?.count ? { ...g, prongs: { ...g.prongs, dia: r2(Math.max(0.35, Math.min(g.L, g.W) * 0.22)) } } : g)); fixes.push('Placed prongs thickened'); }
   return { patch, fixes, needsWeight: has('Weight off target') };
 }
 

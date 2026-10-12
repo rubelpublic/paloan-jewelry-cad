@@ -14,11 +14,23 @@ export const METALS = {
   'pt950':    { label: 'Platinum 950',          density: 20.10, color: 0xd4d6d8, rough: 0.13, minWall: 0.5, castMin: 0.45 },
   'pd950':    { label: 'Palladium 950',         density: 12.00, color: 0xcfd0cf, rough: 0.14, minWall: 0.6, castMin: 0.5 },
   'ag925':    { label: 'Sterling Silver 925',   density: 10.36, color: 0xe4e4e4, rough: 0.12, minWall: 0.8, castMin: 0.7 },
+  '9ky':      { label: '9K Yellow Gold (375)',  density: 11.20, color: 0xd6b26a, rough: 0.18, minWall: 0.7, castMin: 0.6 },
+  '18kwpd':   { label: '18K White Gold (Pd)',   density: 16.00, color: 0xd9d9d4, rough: 0.14, minWall: 0.6, castMin: 0.5 },
+  'pt900':    { label: 'Platinum 900',          density: 21.50, color: 0xd2d4d6, rough: 0.13, minWall: 0.5, castMin: 0.45 },
+  'pt999':    { label: 'Platinum 999',          density: 21.45, color: 0xd6d8da, rough: 0.12, minWall: 0.6, castMin: 0.5 },
+  'pd500':    { label: 'Palladium 500',         density: 11.40, color: 0xcfcfcc, rough: 0.15, minWall: 0.6, castMin: 0.5 },
+  'ag950':    { label: 'Britannia Silver 950',  density: 10.40, color: 0xe6e6e6, rough: 0.12, minWall: 0.8, castMin: 0.7 },
+  'ag935':    { label: 'Argentium Silver 935',  density: 10.25, color: 0xe8e8e8, rough: 0.12, minWall: 0.8, castMin: 0.7 },
+  'ti':       { label: 'Titanium Gr 5',         density: 4.43,  color: 0xb9bcbf, rough: 0.2,  minWall: 0.6, castMin: 0.6 },
+  'ss316':    { label: 'Stainless Steel 316L',  density: 8.00,  color: 0xc4c6c8, rough: 0.16, minWall: 0.6, castMin: 0.6 },
+  'bronze':   { label: 'Bronze',                density: 8.80,  color: 0xb98a4a, rough: 0.25, minWall: 0.8, castMin: 0.7 },
+  'cu':       { label: 'Copper',                density: 8.96,  color: 0xc77b4a, rough: 0.22, minWall: 0.8, castMin: 0.7 },
   'brass':    { label: 'Brass (prototype)',     density: 8.50,  color: 0xc9a54a, rough: 0.25, minWall: 0.8, castMin: 0.7 },
 };
 
 // Wax / resin for casting trees and 3D printing quotes.
 export const WAX_DENSITY = 1.0;
+export const MODEL_MATERIALS = { 'Casting wax': 0.95, 'Castable resin': 1.15, 'Standard resin': 1.12 };
 
 export const GEMS = {
   diamond:    { label: 'Diamond',          density: 3.52, ior: 2.42, color: 0xffffff, hardness: 10 },

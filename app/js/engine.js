@@ -9,6 +9,8 @@ import { buildRelief } from './geom/relief.js';
 import { buildName } from './geom/text.js';
 import { ensureFont, getFont } from './fonts.js';
 import { applyEdits } from './editor.js';
+import { addPlacedGems } from './geom/gems.js';
+import { addInserts } from './assets.js';
 import { merge, signedVolume, surfaceArea } from './geom/util.js';
 import { METALS, GEMS } from './data.js';
 
@@ -60,6 +62,8 @@ export function generate(type, params, { csg = true } = {}) {
   model.type = type;
   model.booleans = [];
   if (params.headMetal && params.headMetal !== 'same') for (const part of model.parts) if (part.kind === 'metal' && part.layer.startsWith('Head')) part.metal = params.headMetal;
+  addPlacedGems(model, params.gems);
+  addInserts(model, params.inserts);
   applyEdits(model, params.edits, type);
   const asGeo = (c) => (Array.isArray(c.geometry) ? merge(c.geometry, 0.1) : c.geometry);
   if (csg && params.seatCut !== false) {
@@ -77,8 +81,24 @@ export function generate(type, params, { csg = true } = {}) {
   }
   delete model.meta.haloCutters;
   if (csg) {
-    const order = { hollow: 0, light: 1, openwork: 2, engrave: 3 };
+    const order = { hollow: 0, light: 1, openwork: 2, engrave: 3, gemcut: 4 };
     for (const cut of model.cutters.filter((c) => c.target).sort((a, b) => order[a.type] - order[b.type])) {
+      if (cut.target === '*') {
+        // gem cutters: only the cutters that touch each piece (keeps hundreds of beads/prongs fast)
+        const list = [].concat(cut.geometry);
+        list.forEach((c) => boxOf(c));
+        let n = 0;
+        for (const part of model.parts) if (part.kind === 'metal' && !part.noGemCut) {
+          part.pieces = part.pieces.map((pc) => {
+            const hits = list.filter((c) => c.boundingBox.intersectsBox(boxOf(pc)));
+            if (!hits.length) return pc;
+            n++;
+            return subtract(pc, hits.length === 1 ? hits[0] : merge(hits, 0.1));
+          });
+        }
+        if (n) model.booleans.push(`gem seats (${list.length} cutters) → ${n} metal piece(s)`);
+        continue;
+      }
       const g = asGeo(cut);
       for (const part of model.parts) if (part.csgTarget === cut.target) {
         part.pieces = part.pieces.map((pc) => subtract(pc, g));

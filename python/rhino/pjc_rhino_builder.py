@@ -45,7 +45,8 @@ except Exception:
     pass
 
 DENSITY = {"24k": 19.32, "22k": 17.8, "18ky": 15.5, "18kw": 15.9, "18kr": 15.2, "14ky": 13.1, "14kw": 12.6, "14kr": 13.0,
-           "10ky": 11.6, "pt950": 20.1, "pd950": 12.0, "ag925": 10.36, "brass": 8.5}
+           "10ky": 11.6, "pt950": 20.1, "pd950": 12.0, "ag925": 10.36, "brass": 8.5, "9ky": 11.2, "18kwpd": 16.0,
+           "pt900": 21.5, "pt999": 21.45, "pd500": 11.4, "ag950": 10.4, "ag935": 10.25, "ti": 4.43, "ss316": 8.0, "bronze": 8.8, "cu": 8.96}
 CUTS = {  # ratio, width of 1 ct, depth %, table %
     "round": (1.0, 6.4, 0.615, 0.57), "oval": (1.40, 5.6, 0.60, 0.57), "cushion": (1.05, 5.6, 0.66, 0.60), "princess": (1.0, 5.5, 0.72, 0.68),
     "emerald": (1.40, 5.0, 0.65, 0.65), "asscher": (1.0, 5.5, 0.66, 0.62), "radiant": (1.25, 5.5, 0.66, 0.64), "pear": (1.55, 5.5, 0.60, 0.56),
@@ -1168,12 +1169,71 @@ def build_name():
     log("Name '%s' - letters extruded from the exported outlines; add the end loops with Torus (inner %.1f mm)." % (g("text", ""), g("bailInner", 3.0)))
 
 
+def build_placed_gems():
+    """Free-placed gems from the 💎 Gems tab: gem + prongs + cutter oriented on the surface normal."""
+    gems = PARAMS.get("gems") or []
+    if not gems:
+        return
+    cutters_all = []
+    for gi, gm in enumerate(gems):
+        cut, L, W = gm.get("cut", "round"), gm.get("L", 1.5), gm.get("W", 1.5)
+        stone, info = stone_brep(cut, L, W, n=16 if L <= 2.5 else 32)
+        px, py, pz = gm["p"]
+        nx, ny, nz = gm["n"]
+        n = rg.Vector3d(nx, -nz, ny)                                   # app Y-up -> Rhino Z-up
+        n.Unitize()
+        lift = gm.get("depth", 0.05) - info["top"]
+        origin = rg.Point3d(px, -pz, py) + n * lift
+        xf = rg.Transform.Translation(rg.Vector3d(origin)) * rg.Transform.Rotation(rg.Vector3d.ZAxis, n, rg.Point3d.Origin) * \
+            rg.Transform.Rotation(math.radians(gm.get("rot", 0)), rg.Vector3d.ZAxis, rg.Point3d.Origin)
+        stone.Transform(xf)
+        emit(stone, "Stones::Placed", "Placed gem %d" % (gi + 1), "stone")
+        pr = gm.get("prongs") or {}
+        if pr.get("count", 0) > 0:
+            ol = outline(cut, L, W, 48)
+            r = pr.get("dia", 0.45) / 2
+            surf_z = -lift
+            angs = [math.pi / 2, -math.pi / 2] if pr["count"] == 2 else prong_angles(cut, pr["count"])
+            for a in angs:
+                rp = rim_point(ol, a)
+                rr = math.hypot(rp[0], rp[1]) or 1
+                k = (rr + r - pr.get("overlap", 0.12)) / rr
+                x, y = rp[0] * k, rp[1] * k
+                tip = info["top"] * 0.35 + pr.get("height", 0.3)
+                b = pipe(interp([P3(x, y, surf_z - 0.6), P3(x, y, (surf_z + tip) / 2), P3(x * 0.99, y * 0.99, tip)]), r)
+                if b is not None:
+                    b.Transform(xf)
+                    emit(b, "Metal::Head::Placed prongs", "Placed prong")
+                if pr.get("tip", "bead") != "flat":
+                    s = sphere(P3(x * 0.97, y * 0.97, tip + r * 0.2), r * 1.12)
+                    s.Transform(xf)
+                    emit(s, "Metal::Head::Placed prongs", "Prong bead")
+        c = gm.get("cutter") or {}
+        if c.get("on", True):
+            ol = outline(cut, L, W, 48)
+            sc = 1 + 2 * c.get("tol", 0.04) / min(L, W)
+            rings = [(sc, info["top"] + c.get("top", 1.2)), (sc, -info["girdle"] / 2)]
+            if c.get("hole", True):
+                hr = max(0.2, min(0.9, c.get("holeRatio", 0.55)))
+                rings += [(hr, -info["girdle"] / 2 - info["pavilion"] * (1 - hr)), (hr, info["culet"] - c.get("holeDepth", 1.6))]
+            else:
+                rings += [(0.08, info["culet"] - 0.05)]
+            curves = [polyline([P3(x * s_, y * s_, z) for x, y in ol]) for s_, z in rings]
+            cb = cap(loft(curves, False, straight=True))
+            if cb is not None:
+                cb.Transform(xf)
+                cutters_all.append(cb)
+                emit(cb, "Cutters::Gem seats", "Gem cutter %d" % (gi + 1), "cutter")
+    log("Placed gems: %d (cutters on PJC::Cutters::Gem seats - BooleanDifference them from the metal)" % len(gems))
+
+
 # ------------------------------------------------------------------ main
 def main():
     kind = PARAMS.get("type", "ring")
     log("Paloan Jewelry CAD Master - building %s" % kind)
     {"ring": build_ring, "pendant": build_pendant, "earring": build_earring, "bangle": build_bangle, "chain": build_chain,
      "relief": build_relief, "name": build_name}.get(kind, build_ring)()
+    build_placed_gems()
     build_extras()
     colors = {"metal": SD.Color.FromArgb(214, 175, 75), "stone": SD.Color.FromArgb(160, 210, 255), "cutter": SD.Color.FromArgb(230, 60, 60)}
     metal = [b for b, l, n, k in OUT if k == "metal" and b is not None]

@@ -72,6 +72,23 @@
 - **◈ Matching set** shows a coordinated ring, pendant, studs, drops, bangle and chain as thumbnails. Click one to design it.
 - **Style mixer:** choose two styles and a blend, then *Apply mixed style*.
 
+## 1f. 💎 Gems, 📚 Library, gem map, summary (v1.4)
+- **💎 Gems tab:**
+  - Set the gem (cut, calibrated size, material, table height above the metal, rotation), the prongs (count, Ø, height, tip, overlap) and the cutter (tolerance, top extension, culet hole Ø and depth).
+  - **● Place gems** places a gem wherever you click on the metal. **⋯ Row** fills the span between two clicks at the target gap.
+  - **Mirror X** places the matching gem on the other side.
+  - **⇲ Compact to gap** pulls placed gems together or apart to the exact gap along the surface. **⟲ Re-snap** puts gems back on the surface after you change the piece.
+  - **Apply settings to all** updates every placed gem. Delete gems one at a time from the list.
+  - **⟷ Show distances** draws colour-coded gap lines between all gems; the stats show the closest gap and the collision count.
+  - **◉ Gem map view** colours gems by size with a legend. **⬇ Gem map PNG** exports it.
+- **📚 Library:** the asset manager.
+  - **☆ Save current design**, **☆ Save selected part** (turn on ✥ Edit and click a part first) and **☆ Save gem setting**.
+  - Built-in gems, prong sets, cutters and settings are included.
+  - **Use** loads a gem asset into Gem tools; **Insert** adds a saved part to the current design, then position it with ✥ Edit; **Open** opens a saved design.
+  - Export or import the whole library as JSON.
+- **Weights:** 24 alloys, custom alloys (name + density) and wax/resin model weights, in the right panel.
+- **▤ Summary with gem map** (Report tab): overview, gem table with carat totals, gem map image, weights in every alloy, components and checks. Print it or download it as HTML.
+
 ## 2. Right panel
 - **Weight card**: finished weight in the chosen alloy (pairs for earrings), metal volume (exact union of all parts), cast weight (+4 %), resin/wax model weight, surface area, total carats, bounding box, metal cost (set price on the Report tab).
 - **Manufacturability**: every check with pass / warn / fail, the measured value and the fix. Score = 100 − 20 per fail − 6 per warn.

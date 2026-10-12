@@ -111,6 +111,18 @@ export function validate(model, m, params, metalKey) {
   if (meta.coilWire) add(meta.coilWire < 0.6 ? 'warn' : 'pass', 'Coil wire', `Coil wire Ø ≈ ${f(meta.coilWire)} mm${meta.coilWire < 0.6 ? ' — fragile at the thin end' : ''}.`, meta.coilWire < 0.6 ? 'Keep curling wire ≥ 0.6 mm or fuse the coil to the base.' : '');
   if (meta.twistWire) add(meta.twistWire < 1.0 ? 'warn' : 'pass', 'Twisted strands', `Strand Ø ${f(meta.twistWire)} mm.`, meta.twistWire < 1.0 ? 'Strands under 1 mm fuse poorly; widen the band.' : '');
 
+  // ---- gem spacing (all gems) & placed gems ----
+  if (meta.gemGaps && meta.gemGaps.pairs) {
+    const g = meta.gemGaps;
+    if (g.collisions > 0) add('fail', 'Gems colliding', `${g.collisions} gem pair(s) closer than 0.05 mm (closest ${f(g.min, 3)} mm).`, 'Use ⇲ Compact to gap (0.1–0.2 mm) in 💎 Gems, or reduce stone size.');
+    else if (g.min < 0.08) add('warn', 'Very tight gem spacing', `Closest girdles ${f(g.min, 3)} mm apart.`, 'Setters need 0.08–0.2 mm between stones.');
+    else add('pass', 'Gem spacing', `Closest girdles ${f(g.min, 3)} mm apart — settable.`);
+  }
+  if (meta.placedGems) add('info', 'Placed gems', `${meta.placedGems.count} free-placed gems · ${f(meta.placedGems.ct, 3)} ct · seats cut by gem cutters.`);
+  for (const pg of params.gems || []) {
+    if (pg.prongs?.count > 0 && pg.prongs.dia < Math.max(0.3, Math.min(pg.L, pg.W) * 0.18)) { add('warn', 'Thin placed prongs', `Ø ${f(pg.prongs.dia)} mm on ${f(pg.L)} mm gems.`, `Use ≥ ${f(Math.max(0.3, Math.min(pg.L, pg.W) * 0.2))} mm.`); break; }
+  }
+
   // ---- settings v1.2 ----
   if (meta.headType === 'collet') {
     if (meta.colletWall < RULES.bezelWallMin) add('fail', 'Collet wall too thin', `${f(meta.colletWall)} mm.`, 'Use ≥ 0.6 mm.');
