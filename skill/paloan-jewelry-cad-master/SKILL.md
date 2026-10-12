@@ -76,6 +76,14 @@ Order of operations: **hollow hidden areas** (under-shank channel, pendant back,
 ### E. Parametric systems (Use Case 5)
 Define the parameter set (with ranges and units), dependency graph (ring size → circle → sections → loft; stone → outline → prongs/gallery/seat), constraints that clamp unsafe values, and outputs (breps per layer, weight). Provide Grasshopper component logic and/or GhPython using the Paloan builder (`P` JSON input). See `references/grasshopper-parametric.md`.
 
+### G. Image → 3D, text and personalisation
+- **Image to relief:** separate the subject from the background, map brightness to height (0.4–1.2 mm relief on a base of ≥ 0.8 mm), keep the smallest features ≥ 0.3 mm, add a raised border of 1–1.5 mm for coins, and avoid undercuts. In Rhino, use the relief as a mesh or apply MatrixGold Texture / Displace on a clean NURBS base.
+- **Silhouette:** trace the outline, extrude it to 1.2–2 mm, and fillet the front edge 0.3–0.5 mm.
+- **Name pieces:** every letter must touch the next or a connector (underline ≥ 0.8 mm high, or a back plate). Remove or bridge floating i/j dots. Strokes ≥ 0.6–0.7 mm (letters on a plate ≥ 0.35 mm). Thickness 1.0–1.4 mm for gold. Chain loops ≥ 2.5–3 mm inner.
+- **Signet:** plate ≥ 1.2 mm above the band, engraving depth ≤ plate − 0.5 mm, engraved lines ≥ 0.3 mm wide. For seal intaglio, the design must be mirrored.
+- **Inside engraving:** 1.2–2 mm letters, 0.1–0.2 mm deep, usually laser-engraved after polishing.
+- **Three-stone / eternity / two-tone:** side stones 50–70 % of the centre width, ≥ 0.2 mm clear of the centre head. Full eternity can't be resized. Two-tone parts are cast separately and laser-welded, or selectively plated.
+
 ### F. CAD quality review (Capability 9)
 Compare against reference/intent: proportions (width/height ratios, head-to-shank), prong alignment & count, symmetry, stone placement/height, carving depth, openwork spacing, surface continuity (G1/G2 at blends), naked edges. Output a defect list: *what — where — measured vs expected — fix*.
 

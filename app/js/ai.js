@@ -32,7 +32,8 @@ async function loadSkill() {
 function paramSpec() {
   return Object.entries(SCHEMAS).map(([type, s]) => {
     const keys = s.fields.map((f) => {
-      if (f.t === 'select') return `${f.k}: ${Object.keys(f.opts).map((x) => JSON.stringify(x)).join('|')}`;
+      if (f.t === 'select') return `${f.k}: ${Object.keys(typeof f.opts === 'function' ? f.opts() : f.opts).map((x) => JSON.stringify(x)).join('|')}`;
+      if (f.t === 'text') return `${f.k}: string`;
       if (f.t === 'check') return `${f.k}: boolean`;
       return `${f.k}: number${f.unit ? ` (${f.unit})` : ''}${f.min !== undefined ? ` [${f.min}–${f.max}]` : ''}`;
     });

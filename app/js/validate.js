@@ -111,6 +111,53 @@ export function validate(model, m, params, metalKey) {
   if (meta.coilWire) add(meta.coilWire < 0.6 ? 'warn' : 'pass', 'Coil wire', `Coil wire Ø ≈ ${f(meta.coilWire)} mm${meta.coilWire < 0.6 ? ' — fragile at the thin end' : ''}.`, meta.coilWire < 0.6 ? 'Keep curling wire ≥ 0.6 mm or fuse the coil to the base.' : '');
   if (meta.twistWire) add(meta.twistWire < 1.0 ? 'warn' : 'pass', 'Twisted strands', `Strand Ø ${f(meta.twistWire)} mm.`, meta.twistWire < 1.0 ? 'Strands under 1 mm fuse poorly; widen the band.' : '');
 
+  // ---- signet / text / relief / two-tone ----
+  if (meta.signet) {
+    const s = meta.signet;
+    if (s.T < 0.8) add('fail', 'Signet plate too thin', `${f(s.T)} mm above the band.`, 'Use ≥ 1.2 mm so the face can be engraved and re-polished.');
+    else add('pass', 'Signet plate', `${s.shape} ${f(s.W)} × ${f(s.L)} mm, ${f(s.T)} mm high.`);
+    if (s.face !== 'plain' && meta.faceDepth > s.T - 0.5) add('fail', 'Face cut too deep', `${f(meta.faceDepth)} mm into a ${f(s.T)} mm plate.`, `Keep ≥ 0.5 mm under the engraving (max ${f(s.T - 0.5)} mm).`);
+    if (meta.faceStroke !== undefined) {
+      const minS = s.face.endsWith('engrave') ? 0.3 : 0.5;
+      if (meta.faceStroke < minS) add('warn', 'Fine monogram strokes', `Thinnest stroke ≈ ${f(meta.faceStroke)} mm.`, 'Use a bolder font or bigger initials (engraved lines ≥ 0.3 mm, raised ≥ 0.5 mm).');
+    }
+    if (s.face.startsWith('image')) add('info', 'Signet image', 'Image relief comes from the Image → 3D tab; for seal-quality intaglio use 0.4–0.8 mm depth with clean, high-contrast artwork.');
+  }
+  if (meta.side) add('pass', 'Three-stone layout', `Side ${meta.side.cut} ${f(meta.side.L)} × ${f(meta.side.W)} mm at ±${f(meta.side.angleDeg, 1)}°, ${f(meta.side.gap)} mm clear of the centre head.`);
+  if (meta.accentMode === 'full-eternity') add('warn', 'Full eternity cannot be resized', `${meta.accentCount} stones all around the band.`, 'Confirm the exact finger size before casting, or use half eternity.');
+  else if (meta.accentMode === 'half-eternity') add('info', 'Half eternity', `${meta.accentCount} stones over the top half; the plain bottom can be resized ±1 size.`);
+  if (meta.engrave) {
+    const e = meta.engrave;
+    if (e.tooLong) add('fail', 'Engraving too long', `"${e.text}" does not fit inside the band.`, 'Shorten the text or reduce the letter height.');
+    else {
+      if (e.size < 1.0) add('warn', 'Tiny engraving', `${f(e.size)} mm letters are hard to read.`, 'Use ≥ 1.2 mm for laser, ≥ 1.5 mm for cast engraving.');
+      if (e.depth > Math.min(0.3, meta.minThickness * 0.2)) add('warn', 'Deep engraving', `${f(e.depth)} mm into a ${f(meta.minThickness)} mm shank.`, 'Keep 0.1–0.2 mm (or laser-engrave after casting).');
+      else add('pass', 'Inside engraving', `"${e.text}" ${f(e.size)} mm high, ${f(e.depth)} mm deep, spans ${f(e.arcDeg, 0)}° of the inside.`);
+    }
+  }
+  if (type === 'name') {
+    if (!meta.fontReady) add('info', 'Font loading', 'The font is downloading — the design will rebuild automatically.');
+    else {
+      if (meta.groups > 1) add('fail', 'Letters are not connected', `${meta.groups} separate pieces — they would fall apart.`, 'Choose a connected script font, add an underline bar or a back plate, reduce letter spacing, or remove floating i/j dots.');
+      else add('pass', 'One connected piece', `All letters touch the next one or the connector${meta.removedDots ? ` (${meta.removedDots} floating dot/accent removed)` : ''}.`);
+      const need = meta.plateThickness ? 0.35 : metal.minWall + 0.1;            // letters on a back plate are supported
+      if (meta.minStroke < need * 0.8 && !meta.plateThickness) add('fail', 'Strokes too thin', `Average thinnest stroke ≈ ${f(meta.minStroke)} mm.`, `Increase letter height or use a bolder font (strokes ≥ ${f(need)} mm).`);
+      else if (meta.minStroke < need) add('warn', 'Delicate strokes', `≈ ${f(meta.minStroke)} mm.`, `≥ ${f(need)} mm is safer for daily wear.`);
+      else add('pass', 'Stroke width', `≈ ${f(meta.minStroke)} mm minimum.`);
+      if (meta.thickness < 0.9) add('warn', 'Thin name plate', `${f(meta.thickness)} mm bends easily.`, 'Use 1.0–1.4 mm for gold, 1.2–1.6 mm for silver.');
+    }
+  }
+  if (type === 'relief') {
+    if (!meta.hasImage) add('info', 'Demo motif', 'Upload a photo, logo or sketch in the Image → 3D tab to replace the demo rose.');
+    if (meta.base < metal.minWall + 0.2) add('fail', 'Base too thin', `${f(meta.base)} mm under the relief.`, `Use ≥ ${f(metal.minWall + 0.4)} mm.`);
+    else add('pass', 'Base thickness', `${f(meta.base)} mm base + ${f(meta.reliefDepth)} mm relief.`);
+    if (meta.reliefDepth > 2.0) add('warn', 'Very deep relief', `${f(meta.reliefDepth)} mm.`, 'Deep undercuts trap investment; 0.4–1.2 mm reads well and polishes cleanly.');
+    if (meta.cell < 0.06) add('info', 'Detail finer than casting', `Grid cell ${f(meta.cell, 3)} mm — features below ~0.2 mm will soften in casting and polishing.`);
+  }
+  if (params.headMetal && params.headMetal !== 'same' && params.headMetal !== params.metal) add('info', 'Two-tone', `${METALS[params.headMetal]?.label} head on a ${metal.label} body — cast separately and laser-weld/solder, or cast in one metal and rhodium-plate the head.`);
+  if (params.finish === 'oxidized' && /^1[048]k|2[24]k|pt|pd/.test(metalKey)) add('warn', 'Oxidising precious white/yellow metals', 'Liver-of-sulphur blackening only works well on silver.', 'Use black rhodium plating for gold or platinum.');
+  if (meta.pendingFont) add('info', 'Font loading', 'Text features appear once the font has downloaded.');
+
   // ---- weight target ----
   if (params.targetWeight > 0) {
     const d = (m.grams - params.targetWeight) / params.targetWeight;

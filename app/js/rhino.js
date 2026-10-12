@@ -2,7 +2,7 @@
 import { METALS, CUTS } from './data.js';
 
 let lib = null;
-export async function rhinoScript(type, params) {
+export async function rhinoScript(type, params, extra = null) {
   if (!lib) {
     const r = await fetch('python/rhino/pjc_rhino_builder.py');
     if (!r.ok) throw new Error('Could not load the Rhino builder library');
@@ -10,6 +10,7 @@ export async function rhinoScript(type, params) {
   }
   const p = { type, ...params };
   delete p.style;
+  if (extra && (extra.meshes?.length || extra.outlines?.length)) p.extra = extra;
   const json = JSON.stringify(p, null, 1);
   const header = `# Paloan Jewelry CAD Master — exported ${new Date().toISOString().slice(0, 10)}\n# Design: ${type}${params.style ? ' · ' + params.style : ''} · ${METALS[params.metal]?.label || params.metal}\nimport json as _json\nPARAMS = _json.loads(r'''${json}''')\n\n`;
   return header + lib.replace(/^# -\*- coding: utf-8 -\*-\n/, '');
@@ -77,6 +78,24 @@ export function workflow(type, p, meta) {
   }
   if (type === 'bangle') add('Bangle', [`Oval rail ${f(p.innerW)} × ${f(p.innerH)} mm inner, ${p.profile} profile ${f(p.width)} × ${f(p.thickness)} mm, ${c('Sweep1')} or Loft of sections.`, p.cuffGap > 0 ? `Cuff opening ${f(p.cuffGap)} mm at the bottom; round the ends with ${c('FilletEdge')} 0.8 mm.` : '', p.hinge ? `Hinge: 3 knuckles, ${f(p.hingeClearance)} mm gaps, 1.0 mm pin; box clasp opposite.` : '']);
   if (type === 'chain') add('Chain', [`Link: stadium curve ${f(p.linkInnerL)} × ${f(p.linkInnerW)} mm inner, ${c('Pipe')} Ø ${f(p.wireDia)} mm. ${c('ArrayCrv')} ${meta.linkCount} links along the necklace curve, every 2nd rotated 90°.`, 'Most production chain is machine-made — model only custom links and connectors.']);
+  if (type === 'ring' && p.shankStyle === 'signet') add('Signet', [
+    `Plate: ${p.signetShape} ${f(p.signetW)} × ${f(p.signetL)} mm outline (Front = finger axis), ${c('ExtrudeCrv')} ${f(p.signetT + 1.2)} mm from 1.2 mm inside the band, ${c('FilletEdge')} 0.3–0.4 mm. Flare the shank shoulders into the plate with ${c('BlendSrf')} or MatrixGold Signet builder.`,
+    p.signetFace.startsWith('initials') ? `Monogram “${p.signetText}”: ${c('TextObject')} (Output = Curves) → scale to the face → ${p.signetFace.endsWith('engrave') ? `${c('ExtrudeCrv')} ${f(p.faceDepth + 0.6)} mm and ${c('BooleanDifference')} ${f(p.faceDepth)} mm deep` : `${c('ExtrudeCrv')} ${f(p.faceDepth)} mm and ${c('BooleanUnion')}`}. The script imports the exact geometry as a mesh guide.` : '',
+    p.signetFace.startsWith('image') ? `Image face: the exported mesh on ${c('PJC::…::Signet')} is the relief/engraving. For NURBS use MatrixGold Texture / ${c('Displace')} on the face with the same height map, or keep the mesh for printing.` : '',
+  ]);
+  if (type === 'ring' && p.sideStones === 'three-stone') add('Side stones', [`Two ${p.sideCut} side stones at ${f(p.sideRatio * 100, 0)}% of the centre width, ±${f(meta.side?.angleDeg, 1)}° around the band, ${p.sideHead} settings, ${f(meta.side?.gap)} mm clear of the centre head. Build one head, ${c('Mirror')} across the YZ plane.`]);
+  if (type === 'ring' && p.accentMode && p.accentMode !== 'shoulders') add('Eternity', [`${meta.accentCount} × ${f(p.accentSize)} mm round melee in shared-bead settings around ${p.accentMode === 'full-eternity' ? 'the whole band (not resizable)' : 'the top half'}; ${c('ArrayCrv')} gems + bead seats along the band's top curve, ${c('BooleanDifference')} seat holes Ø ${f(p.accentSize * 0.7)} mm.`]);
+  if (type === 'ring' && p.engraveText) add('Inside engraving', [`“${p.engraveText}” ${f(p.engraveSize)} mm high, ${f(p.engraveDepth)} mm deep: ${c('TextObject')} curves → ${c('FlowAlongSrf')} onto the inner surface → ${c('ExtrudeCrv')} → ${c('BooleanDifference')}. Usually laser-engraved after polishing instead.`]);
+  if (type === 'relief') add('Image relief', [
+    `Outline ${p.shape} ${f(meta.width)} × ${f(meta.height)} mm, base ${f(p.base)} mm, relief ${f(p.depth)} mm (${p.mode}).`,
+    `Rhino: the script imports the relief as a closed mesh on ${c('PJC::Metal::Body::Relief')}. For NURBS: ${c('ExtrudeCrv')} the outline as the base and apply MatrixGold Texture / ${c('Displace')} with the same grayscale image; or keep the mesh — reliefs are printed as meshes anyway.`,
+    'Casting: relief ≤ 1.2 mm reads best; avoid undercuts; polish highs, leave recesses satin for contrast.',
+  ]);
+  if (type === 'name') add('Name piece', [
+    `Text “${p.text}” ${f(p.letterHeight)} mm, ${f(p.thickness)} mm thick${p.bar !== 'none' ? `, ${p.bar}` : ''}. Rhino: ${c('TextObject')} (Output = Curves, same font) or use the exported outlines → ${c('ExtrudeCrv')} ${f(p.thickness)} mm → ${c('BooleanUnion')} letters + connector → ${c('FilletEdge')} 0.1 mm.`,
+    p.bail === 'ends' ? `Chain loops: ${c('Torus')} Ø ${f(p.bailInner)} mm inner at both ends, in the plane of the text.` : '',
+  ]);
+  if (p.headMetal && p.headMetal !== 'same') add('Two-tone', [`Head/settings in ${METALS[p.headMetal]?.label}: keep head parts on their own layer, cast separately and laser-weld, or cast one metal and rhodium/gold-plate selectively.`]);
   add('Production', [
     `Metal: ${METALS[p.metal]?.label}; expected finished weight shown on the right (+4% for cast sprue/polish loss).`,
     `Export STL at ${c('0.005 mm')} chord tolerance for resin printing; keep the .3dm with separate polysurfaces as the editable master.`,

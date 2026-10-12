@@ -57,6 +57,7 @@ PROFILES = {"comfort": (2.2, 3.2), "dshape": (2.0, 14.0), "flat": (9.0, 9.0), "k
 CAP_NONE = getattr(rg.PipeCapMode, "None")
 CAP_ROUND = rg.PipeCapMode.Round
 OUT = []        # (brep, layer, name, kind)
+OUT_MESH = []   # (mesh, layer, name, kind)
 REPORT = []
 
 
@@ -588,8 +589,13 @@ def build_ring():
         log("Under-shank hollow %.2f mm deep" % g("hollowDepth", 0.5))
     emit(shanks, "Metal::Shank", "Shank")
 
+    signet = style == "signet"
+    if signet:
+        head = "none"
+        build_signet_plate(R, tt)
     # head
     outer_top = R + tt
+    centre_deg = math.degrees((g("signetW", 12) / 2 + 0.8) / R) if signet else 0.0
     if head != "none":
         cut = g("cut", "round")
         if g("sizeMode", "carat") == "mm":
@@ -603,6 +609,11 @@ def build_ring():
         build_head(cut, L, Wd, -(girdle_z - outer_top) - 0.05, xf, head, int(g("prongCount", 4)), g("prongStyle", "round"),
                    g("prongDia", 0), int(g("rails", 1)), g("haloStone", 1.3), g("haloGap", 0.15), g("seatCut", True), gem=g("gem", "diamond"))
         log("Stone %s %.2f x %.2f mm, girdle at Z=%.2f" % (cut, L, Wd, girdle_z))
+        pd = g("prongDia", 0) or prong_dia_for(min(L, Wd))
+        centre_deg = 14 + math.degrees(max(L, Wd) / 2 / R) * 0.6
+        if g("sideStones", "none") == "three-stone":
+            ang, sw = build_side_stones(R, tt, L, Wd, girdle_z, pd)
+            centre_deg += ang + math.degrees((sw / 2 + 1) / R)
         if g("cathedral", False) and head != "bezel":
             hw = max(L, Wd) / 2.0
             arcs = []
@@ -614,6 +625,10 @@ def build_ring():
                     top = P3(sx * hw * 0.55, sz * L * 0.22, girdle_z + info["culet"] * 0.38)
                     arcs.append(pipe(interp([sh, mid, top]), min(W(th), T(th)) * 0.32, 0.45))
             emit(arcs, "Metal::Shank::Cathedral", "Cathedral arch")
+
+    build_accents(R, T, W, head, centre_deg)
+    if g("engraveText", ""):
+        log("Inside engraving '%s': imported as a cutter mesh on PJC::Cutters::Engraving (laser-engrave after polishing, or TextObject + FlowAlongSrf)." % g("engraveText", ""))
 
     # spikes
     n_sp = int(g("spikes", 0))
@@ -921,11 +936,145 @@ def build_chain():
     log("Chain: %d links total (%d modelled; ArrayCrv the rest along your neckline curve)" % (count, show))
 
 
+# ------------------------------------------------------------------ v1.1: extras, signet, three-stone, eternity, relief, names
+def build_extras():
+    """Geometry the web app computed that has no parametric NURBS recipe (image reliefs, text outlines, engraving cutters)."""
+    extra = PARAMS.get("extra") or {}
+    for m in extra.get("meshes", []):
+        mesh = rg.Mesh()
+        v = m["v"]
+        for i in range(0, len(v), 3):
+            mesh.Vertices.Add(v[i], -v[i + 2], v[i + 1])          # app Y-up → Rhino Z-up (x, -z, y)
+        f = m["f"]
+        for i in range(0, len(f), 3):
+            mesh.Faces.AddFace(f[i], f[i + 1], f[i + 2])
+        mesh.Normals.ComputeNormals()
+        mesh.Compact()
+        OUT_MESH.append((mesh, m.get("layer", "Metal::Mesh"), m.get("name", "Mesh"), m.get("kind", "metal")))
+    for o in extra.get("outlines", []):
+        z0, z1 = o.get("z0", 0), o.get("z1", 1)
+        def crv(pts, z):
+            return polyline([P3(x, -z, y) for x, y in pts])          # outline lies in the app XY plane (front view)
+        outer = extrude_planar(crv(o["outer"], z0), rg.Vector3d(0, -(z1 - z0), 0))
+        holes = [extrude_planar(crv(h, z0 - 0.01), rg.Vector3d(0, -(z1 - z0) - 0.02, 0)) for h in o.get("holes", []) if len(h) > 2]
+        if holes:
+            outer = boolean_diff(outer, holes)
+        emit(outer, o.get("layer", "Metal::Body::Letters"), o.get("name", "Letter"))
+
+
+def signet_outline(shape, W, L, n=96):
+    pts = []
+    for i in range(n):
+        t = 2 * math.pi * i / n
+        c, s = math.cos(t), math.sin(t)
+        if shape == "cushion":
+            x, z = W / 2 * math.copysign(abs(c) ** 0.5, c), L / 2 * math.copysign(abs(s) ** 0.5, s)
+        elif shape == "square":
+            x, z = W / 2 * math.copysign(abs(c) ** 0.2, c), L / 2 * math.copysign(abs(s) ** 0.2, s)
+        elif shape == "octagon":
+            k = 1.0 / max(abs(c), abs(s), (abs(c) + abs(s)) / 1.44)
+            x, z = W / 2 * c * k, L / 2 * s * k
+        else:
+            x, z = W / 2 * c, L / 2 * s
+        pts.append((x, z))
+    return pts
+
+
+def build_signet_plate(R, tt):
+    W, L, T = g("signetW", 12), g("signetL", 10), g("signetT", 1.6)
+    outer_top = R + tt
+    pts = signet_outline(g("signetShape", "oval"), W, L)
+    crv = interp([P3(x, z, outer_top - 1.2) for x, z in pts], True)   # ring frame: x across, finger axis = Y, up = Z
+    plate = extrude_planar(crv, rg.Vector3d(0, 0, T + 1.2))
+    emit(plate, "Metal::Shank::Signet", "Signet plate")
+    log("Signet plate %s %.1f x %.1f mm, %.2f mm high (face: %s)" % (g("signetShape", "oval"), W, L, T, g("signetFace", "plain")))
+
+
+def build_side_stones(R, tt, centre_L, centre_W, girdle_z, prong_d):
+    cut = g("sideCut", "round")
+    ratio, w1, depth, table = CUTS.get(cut, CUTS["round"])
+    sW = centre_W * g("sideRatio", 0.6)
+    sL = sW * ratio
+    rotated = cut in ("pear", "heart", "marquise", "trillion")
+    x_ext = (sL if rotated else sW) / 2
+    _, info = stone_brep(cut, sL, sW)
+    outer_top = R + tt
+    lift = max(0.3, g("galleryLift", 1.2) * 0.6)
+    r_s = outer_top + lift - info["culet"]
+    centre_half = centre_W / 2 + prong_d
+    side_pd = max(0.6, prong_d * 0.85)
+    theta = (centre_half + 0.3 + x_ext + side_pd) / ((girdle_z + r_s) / 2)
+    for side in (-1, 1):
+        xf = rg.Transform.Rotation(-side * theta, rg.Vector3d.YAxis, rg.Point3d.Origin) * rg.Transform.Translation(0, 0, r_s)
+        if rotated:
+            xf = xf * rg.Transform.Rotation(-side * math.pi / 2, rg.Vector3d.ZAxis, rg.Point3d.Origin)
+        build_head(cut, sL, sW, -(r_s - outer_top) - 0.05, xf, g("sideHead", "prong"), 3 if cut in ("pear", "heart", "trillion") else 4,
+                   g("prongStyle", "round"), 0, 1, gem=g("gem", "diamond"))
+    log("Side stones: 2 x %s %.2f x %.2f mm at +/-%.1f deg" % (cut, sL, sW, math.degrees(theta)))
+    return math.degrees(theta), sW
+
+
+def build_accents(R, T, W, head, centre_deg):
+    mode = g("accentMode", "shoulders")
+    count = int(g("accentCount", 0))
+    if mode == "shoulders" and count <= 0:
+        return
+    sz = g("accentSize", 1.3)
+    pitch = sz + 0.25
+    Rt = R + g("thickTop", 1.9)
+    angles = []
+    if mode == "shoulders":
+        for side in (-1, 1):
+            for i in range(count):
+                angles.append(side * (max(centre_deg, 8) + math.degrees(i * pitch / Rt)))
+    else:
+        span = 360.0 if mode == "full-eternity" else 180.0
+        n = int(math.radians(span) * Rt // pitch)
+        for i in range(n):
+            a = (i / float(n)) * 360 if mode == "full-eternity" else -span / 2 + (i + 0.5) / n * span
+            a = ((a + 540) % 360) - 180
+            if abs(a) >= centre_deg:
+                angles.append(a)
+    gems, beads = [], []
+    for deg in angles:
+        th = math.radians(deg)
+        _, info = stone_brep("round", sz, sz, n=16)
+        r = R + T(th) - info["top"] * 0.35
+        xf = rg.Transform.Rotation(th, rg.Vector3d.YAxis, rg.Point3d.Origin) * rg.Transform.Translation(0, 0, r)
+        b, _ = stone_brep("round", sz, sz, xf, n=16)
+        gems.append(b)
+        bth = th + (pitch / 2) / Rt
+        br = R + T(bth) + 0.05
+        for bz in (-1, 1):
+            beads.append(sphere(P3(math.sin(bth) * br, bz * (sz / 2 + 0.05), math.cos(bth) * br), 0.3))
+    emit(gems, "Stones::Accents", "Accent stone", "stone")
+    emit(beads, "Metal::Shank::Pave", "Pave bead")
+    log("Accent stones (%s): %d x %.2f mm" % (mode, len(gems), sz))
+
+
+def build_relief():
+    if not (PARAMS.get("extra") or {}).get("meshes"):
+        log("Relief: no mesh data in PARAMS['extra'] - export again from the web app (Rhino / GH tab).")
+    if g("bail", "loop") != "none":
+        R = g("bailInner", 3.6) / 2 + g("bailWire", 1.1) / 2
+        top = (PARAMS.get("extra") or {}).get("reliefTop", g("height", 22) / 2)
+        plane = rg.Plane(P3(0, 0, top + R - g("bailWire", 1.1) * 0.35), rg.Vector3d.YAxis, rg.Vector3d.ZAxis)
+        emit(rg.Torus(plane, R, g("bailWire", 1.1) / 2).ToRevSurface().ToBrep(), "Metal::Findings::Bail", "Bail")
+
+
+def build_name():
+    if not (PARAMS.get("extra") or {}).get("outlines"):
+        log("Name: no outline data in PARAMS['extra'] - export again from the web app (Rhino / GH tab).")
+    log("Name '%s' - letters extruded from the exported outlines; add the end loops with Torus (inner %.1f mm)." % (g("text", ""), g("bailInner", 3.0)))
+
+
 # ------------------------------------------------------------------ main
 def main():
     kind = PARAMS.get("type", "ring")
     log("Paloan Jewelry CAD Master - building %s" % kind)
-    {"ring": build_ring, "pendant": build_pendant, "earring": build_earring, "bangle": build_bangle, "chain": build_chain}.get(kind, build_ring)()
+    {"ring": build_ring, "pendant": build_pendant, "earring": build_earring, "bangle": build_bangle, "chain": build_chain,
+     "relief": build_relief, "name": build_name}.get(kind, build_ring)()
+    build_extras()
     colors = {"metal": SD.Color.FromArgb(214, 175, 75), "stone": SD.Color.FromArgb(160, 210, 255), "cutter": SD.Color.FromArgb(230, 60, 60)}
     metal = [b for b, l, n, k in OUT if k == "metal" and b is not None]
     vol = 0.0
@@ -947,6 +1096,11 @@ def main():
     log("Open (non-solid) metal parts: %d" % naked)
     if IN_GH:
         return
+    for m, lay, name, k in OUT_MESH:
+        attr = Rhino.DocObjects.ObjectAttributes()
+        attr.LayerIndex = layer_index("PJC::" + lay, colors.get(k))
+        attr.Name = name
+        DOC.Objects.AddMesh(m, attr)
     for b, lay, name, k in OUT:
         if b is None:
             continue
@@ -964,5 +1118,5 @@ def main():
 
 main()
 if IN_GH:
-    a = [b for b, l, n, k in OUT if b is not None and k != "cutter"]
+    a = [b for b, l, n, k in OUT if b is not None and k != "cutter"] + [m for m, l, n, k in OUT_MESH if k != "cutter"]
     b = "\n".join(REPORT)

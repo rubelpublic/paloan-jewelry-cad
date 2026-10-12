@@ -9,7 +9,10 @@ export function parseBrief(text) {
   const notes = [];
   const p = {};
   let type = 'ring';
-  if (/\b(pendant|charm|locket|medallion|necklace pendant)\b/.test(t)) type = 'pendant';
+  const quoted = (text.match(/["“']([^"”']{1,30})["”']/) || [])[1];
+  if (/\bname (necklace|pendant|bar|plate)|nameplate|name chain|\btext pendant/.test(t)) type = 'name';
+  else if (/\b(coin|medallion|relief|emboss|logo)\b/.test(t) && !/\bring\b/.test(t)) type = 'relief';
+  else if (/\b(pendant|charm|locket|necklace pendant)\b/.test(t)) type = 'pendant';
   else if (/\b(earring|stud|hoop|ear ?wire|drop earring|huggie)s?\b/.test(t)) type = 'earring';
   else if (/\b(bangle|cuff|bracelet)\b/.test(t) && !/\bchain\b/.test(t)) type = 'bangle';
   else if (/\b(chain|necklace)\b/.test(t)) type = 'chain';
@@ -75,13 +78,34 @@ export function parseBrief(text) {
     if (/coin|round pendant|disc/.test(t)) p.shape = 'circle';
   }
 
+  // v1.1 features
+  if (type === 'name') {
+    p.text = quoted || (text.match(/name\s+([A-Z][a-zA-Z]+)/) || [])[1] || 'Amelia';
+    if (/capital|block|bold sans|sans/.test(t)) { p.font = 'helvetiker'; p.bar = 'underline'; }
+    else if (/roman|serif|cinzel|classic/.test(t)) { p.font = 'cinzel'; p.bar = 'plate'; }
+    else if (/elegant|fine script|calligraph/.test(t)) p.font = 'greatvibes';
+    else p.font = 'pacifico';
+    if (/plate|tag|bar\b/.test(t)) p.bar = 'plate';
+    if (/underline/.test(t)) p.bar = 'underline';
+    if ((m = t.match(/(\d+(?:[.,]\d+)?)\s*mm\s*(?:letters|letter|high|tall)/))) p.letterHeight = num(m[1]);
+  }
+  if (type === 'relief' && /coin|medallion/.test(t)) { p.shape = 'circle'; p.rim = 1.2; }
+  if (/signet/.test(t)) { p.shankStyle = 'signet'; p.headType = 'none'; p.widthTop = 6; p.widthBottom = 3.2; p.thickTop = 2.2; p.thickBottom = 1.8;
+    p.signetFace = /initial|monogram|letters/.test(t) ? (/raised|relief/.test(t) ? 'initials-emboss' : 'initials-engrave') : /image|logo|crest/.test(t) ? 'image-engrave' : 'plain';
+    if (quoted && quoted.length <= 4) p.signetText = quoted; }
+  if (/three[- ]stone|trilogy|3[- ]stone/.test(t)) { p.sideStones = 'three-stone'; if (/pear side/.test(t)) p.sideCut = 'pear'; else if (/baguette|emerald side|trapezoid/.test(t)) p.sideCut = 'emerald'; }
+  if (/full eternity/.test(t)) p.accentMode = 'full-eternity'; else if (/eternity/.test(t)) p.accentMode = 'half-eternity';
+  if (/two[- ]tone/.test(t)) p.headMetal = p.metal === '18kw' || p.metal === 'pt950' ? '18ky' : '18kw';
+  if (/engrav/.test(t) && type === 'ring' && quoted && !/signet/.test(t)) p.engraveText = quoted;
+  for (const [k, re] of [['satin', /satin/], ['matte', /matte|sandblast/], ['brushed', /brushed/], ['oxidized', /oxidi[sz]ed|blackened/]]) if (re.test(t)) { p.finish = k; break; }
+
   // features
   if (/split[- ]shank/.test(t)) p.shankStyle = 'split';
   if (/bypass/.test(t)) p.shankStyle = 'bypass';
   if (/twist|braid|rope/.test(t)) p.shankStyle = 'twisted';
   if (/cathedral/.test(t)) p.cathedral = true;
   if (/milgrain|millgrain|beaded edge/.test(t)) p.milgrain = true;
-  if (/pav[eé]|accent|side stones|shoulder stones/.test(t)) { p.accentCount = p.accentCount || 6; }
+  if (/pav[eé]|accent|shoulder stones/.test(t) || (/side stones/.test(t) && !/three[- ]stone|trilogy/.test(t))) { p.accentCount = p.accentCount || 6; }
   if (/hammer|beaten/.test(t)) { if (type === 'ring' || type === 'bangle' || type === 'earring') p.texture = 'hammered'; }
   if (/spike|spiky|thorn/.test(t)) p.spikes = p.spikes || (type === 'bangle' ? 20 : type === 'pendant' ? 16 : 14);
   if (/no spike/.test(t)) p.spikes = 0;

@@ -33,6 +33,13 @@ CASES = [
     {"type": "bangle", "cuffGap": 25},
     {"type": "chain", "linkType": "cable"},
     {"type": "chain", "linkType": "rolo"},
+    {"type": "ring", "shankStyle": "signet", "signetShape": "octagon", "signetFace": "initials-engrave", "signetText": "AR",
+     "extra": {"meshes": [{"layer": "Cutters::Engraving", "name": "cut", "kind": "cutter", "v": [0, 0, 0, 1, 0, 0, 0, 1, 0], "f": [0, 1, 2]}]}},
+    {"type": "ring", "cut": "oval", "carat": 1.5, "sideStones": "three-stone", "sideCut": "pear", "accentMode": "half-eternity", "headMetal": "18ky"},
+    {"type": "ring", "headType": "none", "accentMode": "full-eternity", "accentSize": 2.0},
+    {"type": "ring", "cut": "round", "accentCount": 5},
+    {"type": "relief", "width": 22, "extra": {"reliefTop": 11, "meshes": [{"layer": "Metal::Body::Relief", "name": "Relief", "v": [0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1], "f": [0, 1, 2, 0, 1, 3, 0, 2, 3, 1, 2, 3]}]}},
+    {"type": "name", "text": "Amelia", "extra": {"outlines": [{"outer": [[0, 0], [5, 0], [5, 5], [0, 5]], "holes": [[[1, 1], [2, 1], [2, 2]]], "z0": -0.6, "z1": 0.6}]}},
 ]
 
 

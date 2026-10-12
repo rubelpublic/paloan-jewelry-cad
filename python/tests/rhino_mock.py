@@ -136,6 +136,7 @@ def install():
     rg.Cylinder = lambda *a: MagicMock(ToBrep=lambda *x: _brep())
     rg.Circle = lambda *a: MagicMock()
     rg.Transform = MagicMock()
+    rg.Mesh = MagicMock
     rg.VolumeMassProperties = types.SimpleNamespace(Compute=lambda b: types.SimpleNamespace(Volume=10.0))
 
     rhino = types.ModuleType("Rhino")

@@ -50,4 +50,12 @@ export const TEMPLATES = [
   { id: 'bangle', label: 'Hinged oval bangle', type: 'bangle', params: { metal: '18ky', hinge: true, texture: 'none', backHollow: true } },
   { id: 'cuff', label: 'Gothic spike cuff', type: 'bangle', params: { metal: 'ag925', cuffGap: 25, spikes: 22, width: 10, thickness: 2.6, profile: 'knife' } },
   { id: 'chain', label: 'Cable chain 45 cm', type: 'chain', params: { metal: '18ky', linkType: 'cable', wireDia: 0.8 } },
+  { id: 'trilogy', label: 'Three-stone oval + pear sides', type: 'ring', params: { metal: '18kw', cut: 'oval', carat: 1.2, sideStones: 'three-stone', sideCut: 'pear', sideRatio: 0.62, prongCount: 4 } },
+  { id: 'two-tone', label: 'Two-tone solitaire (white head, yellow band)', type: 'ring', params: { metal: '18ky', headMetal: 'pt950', cut: 'round', carat: 1, prongCount: 6, accentMode: 'half-eternity', accentSize: 1.2, widthTop: 2.4 } },
+  { id: 'eternity', label: 'Full eternity band 2 mm stones', type: 'ring', params: { metal: 'pt950', headType: 'none', accentMode: 'full-eternity', accentSize: 2.0, widthTop: 2.8, widthBottom: 2.8, thickTop: 1.9, thickBottom: 1.9 } },
+  { id: 'signet', label: 'Signet ring · engraved initials', type: 'ring', params: { metal: '14ky', shankStyle: 'signet', signetShape: 'cushion', signetFace: 'initials-engrave', signetText: 'AR', signetFont: 'cinzel', widthTop: 6, widthBottom: 3.2, thickTop: 2.2, thickBottom: 1.8, headType: 'none', finish: 'satin' } },
+  { id: 'engraved-band', label: 'Wedding band · inside engraving', type: 'ring', params: { metal: '18ky', headType: 'none', profile: 'comfort', widthTop: 4, widthBottom: 4, thickTop: 1.8, thickBottom: 1.8, engraveText: 'Forever yours', engraveFont: 'greatvibes', engraveSize: 2 } },
+  { id: 'name', label: 'Name necklace · script', type: 'name', params: { metal: '14ky', text: 'Amelia', font: 'pacifico', letterHeight: 9, thickness: 1.2 } },
+  { id: 'name-plate', label: 'Name bar · capitals on plate', type: 'name', params: { metal: '18kr', text: 'NOOR', font: 'cinzel', bar: 'plate', letterHeight: 8, bail: 'ends' } },
+  { id: 'coin', label: 'Image coin pendant (upload in Image → 3D)', type: 'relief', params: { metal: '18ky', shape: 'circle', width: 22, rim: 1.2, rimHeight: 0.9, depth: 0.6, base: 1.4 } },
 ];

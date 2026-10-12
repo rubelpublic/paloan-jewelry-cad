@@ -35,6 +35,12 @@ function stagesFor(type, p, metal) {
       const t0 = p.dropThick;
       S.push({ label: 'Drop thickness', unit: '×', lo: Math.min(1, 0.9 / t0), hi: 1.8, heavierWhenHigh: true, set: (q, x) => { q.dropThick = +(t0 * x).toFixed(3); } });
     }
+  } else if (type === 'relief') {
+    const b0 = p.base;
+    S.push({ label: 'Base thickness', unit: '×', lo: Math.min(1, (0.8 + soft) / b0), hi: 2, heavierWhenHigh: true, set: (q, x) => { q.base = +(b0 * x).toFixed(3); } });
+  } else if (type === 'name') {
+    const t0 = p.thickness;
+    S.push({ label: 'Letter thickness', unit: '×', lo: Math.min(1, (0.8 + soft) / t0), hi: 2, heavierWhenHigh: true, set: (q, x) => { q.thickness = +(t0 * x).toFixed(3); } });
   } else if (type === 'chain') {
     const d0 = p.wireDia;
     S.push({ label: 'Wire diameter', unit: '×', lo: Math.min(1, 0.6 / d0), hi: 2, heavierWhenHigh: true, set: (q, x) => { q.wireDia = +(d0 * x).toFixed(3); } });

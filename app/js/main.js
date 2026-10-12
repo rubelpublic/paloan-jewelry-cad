@@ -9,7 +9,11 @@ import { SVGLoader } from 'three/addons/loaders/SVGLoader.js';
 import { METALS, GEMS, STYLE_NOTES, usToEu, usToUk, usToIndia } from './data.js';
 import { SCHEMAS } from './schema.js';
 import { STYLE_PRESETS, TEMPLATES } from './presets.js';
-import { generate, measure } from './engine.js';
+import { generate, measure, prepare, fontsNeeded } from './engine.js';
+import { imageStore, exportField, importField } from './image3d.js';
+import { registerFontFile } from './fonts.js';
+import { initImageTab } from './imagetab.js';
+import { initVariations } from './variations.js';
 import { validate } from './validate.js';
 import { optimizeWeight } from './optimize.js';
 import { merge, resample } from './geom/util.js';
@@ -48,9 +52,16 @@ const dimsBox = new THREE.Box3Helper(new THREE.Box3(), 0x6aa8ff); dimsBox.materi
 const clipPlane = new THREE.Plane(new THREE.Vector3(0, 0, -1), 0);
 
 const metalMats = {}, stoneMats = {};
-function metalMat(k) {
-  if (!metalMats[k]) { const m = METALS[k] || METALS['18ky']; metalMats[k] = new THREE.MeshPhysicalMaterial({ color: m.color, metalness: 1, roughness: m.rough, clearcoat: 0.3, clearcoatRoughness: 0.2, side: THREE.DoubleSide }); }
-  return metalMats[k];
+const FINISH = { polished: { r: 0, cc: 0.3 }, satin: { r: 0.22, cc: 0 }, matte: { r: 0.42, cc: 0 }, brushed: { r: 0.18, cc: 0, aniso: 0.85 }, oxidized: { r: 0.3, cc: 0, dark: true } };
+function metalMat(k, finish = 'polished') {
+  const key = k + '|' + finish;
+  if (!metalMats[key]) {
+    const m = METALS[k] || METALS['18ky'], fz = FINISH[finish] || FINISH.polished;
+    const col = new THREE.Color(m.color);
+    if (fz.dark) col.multiplyScalar(0.28);
+    metalMats[key] = new THREE.MeshPhysicalMaterial({ color: col, metalness: 1, roughness: Math.min(0.9, m.rough + fz.r), clearcoat: fz.cc, clearcoatRoughness: 0.2, anisotropy: fz.aniso || 0, side: THREE.DoubleSide });
+  }
+  return metalMats[key];
 }
 function stoneMat(k) {
   if (!stoneMats[k]) { const g = GEMS[k] || GEMS.diamond; stoneMats[k] = new THREE.MeshPhysicalMaterial({ color: g.color, metalness: 0, roughness: 0, transmission: k === 'onyx' ? 0 : 0.92, thickness: 2, ior: Math.min(g.ior, 2.333), specularIntensity: 1, envMapIntensity: 2.2, flatShading: true }); }
@@ -92,11 +103,12 @@ function applyMaterials() {
 }
 
 /* ============================== DESIGN STATE ============================== */
-function defaultsFor(type) { return structuredClone(SCHEMAS[type].defaults); }
+function defaultsFor(type) { return { finish: 'polished', headMetal: 'same', ...structuredClone(SCHEMAS[type].defaults) }; }
 function setType(type, params = null) {
   S.type = type;
   S.params = { ...defaultsFor(type), ...(params || {}) };
   $('#selType').value = type;
+  pushHistory();
   renderForm();
   rebuild(true);
 }
@@ -129,9 +141,16 @@ function fieldEl(fd) {
   const d = document.createElement('div');
   d.dataset.k = fd.k;
   const v = S.params[fd.k];
-  if (fd.t === 'select') {
+  if (fd.t === 'text') {
     d.className = 'f sel';
-    d.innerHTML = `<span>${fd.label}</span><select>${Object.entries(fd.opts).map(([k, l]) => `<option value="${k}"${String(v) === k ? ' selected' : ''}>${esc(l)}</option>`).join('')}</select>`;
+    d.innerHTML = `<span>${fd.label}</span><input type="text" maxlength="40" value="${esc(v ?? '')}">`;
+    const inp = d.querySelector('input');
+    let tt = 0;
+    inp.oninput = () => { clearTimeout(tt); tt = setTimeout(() => onParam(fd.k, inp.value), 350); };
+  } else if (fd.t === 'select') {
+    const opts = typeof fd.opts === 'function' ? fd.opts() : fd.opts;
+    d.className = 'f sel';
+    d.innerHTML = `<span>${fd.label}</span><select>${Object.entries(opts).map(([k, l]) => `<option value="${k}"${String(v) === k ? ' selected' : ''}>${esc(l)}</option>`).join('')}</select>`;
     d.querySelector('select').onchange = (e) => onParam(fd.k, e.target.value);
   } else if (fd.t === 'check') {
     d.className = 'f chk';
@@ -174,6 +193,7 @@ function onParam(k, v, dragging = false) {
   if (k === 'metal') store.set('pjc.metal', v);
   if (k === 'shape') $('#svgUpload').classList.toggle('hidden', v !== 'custom');
   refreshVisibility();
+  if (!dragging) pushHistory();
   rebuild(false, dragging);
 }
 
@@ -191,6 +211,12 @@ function rebuild(fit = false, dragging = false) {
   $('#busy').classList.add('on');
   fullTimer = setTimeout(() => {
     if (id !== buildId) return;
+    if (fontsNeeded(S.type, S.params).length) {
+      $('#busy').textContent = 'Loading font…';
+      prepare(S.type, S.params).then(() => { $('#busy').textContent = 'Building…'; if (id === buildId) rebuild(fit); })
+        .catch((e) => { $('#busy').textContent = 'Building…'; $('#busy').classList.remove('on'); toast(e.message); });
+      return;
+    }
     try {
       const model = generate(S.type, S.params, { csg: true });
       const m = measure(model, S.params.metal);
@@ -210,7 +236,7 @@ function show(model) {
   for (const part of model.parts) {
     const geo = part.pieces.length === 1 ? part.pieces[0] : merge(part.pieces, part.kind === 'stone' ? 0.01 : 0.6);
     if (!geo) continue;
-    const mat = part.kind === 'stone' ? stoneMat(part.gem) : metalMat(S.params.metal);
+    const mat = part.kind === 'stone' ? stoneMat(part.gem) : metalMat(part.metal || S.params.metal, S.params.finish);
     const mesh = new THREE.Mesh(geo, mat);
     mesh.name = part.name; mesh.userData.kind = part.kind;
     mesh.visible = !S.hidden.has(part.name) && (part.kind !== 'stone' || S.showStones);
@@ -241,6 +267,7 @@ function renderAnalysis() {
   $('#wMetal').textContent = `${metal.label}${m.pair ? ' · pair' : ''}`;
   const price = parseFloat($('#priceG').value);
   const kv = [
+    ...(m.byMetal && Object.keys(m.byMetal).length > 1 ? Object.entries(m.byMetal).map(([k, g]) => [METALS[k].label, `${f(g)} g`]) : []),
     ['Metal volume', `${f(m.volume, 1)} mm³`],
     ['Cast weight (+4%)', `${f(m.grams * 1.04)} g`],
     ['Resin / wax model', `${f(m.volume / 1000 * 1.1, 2)} g`],
@@ -386,11 +413,12 @@ $('#fileSvg').onchange = async (e) => {
 const area = (pts) => Math.abs(pts.reduce((s, p, i) => { const q = pts[(i + 1) % pts.length]; return s + p.x * q.y - q.x * p.y; }, 0)) / 2;
 
 /* project save / load / share */
-const projectJson = () => JSON.stringify({ app: 'paloan-jewelry-cad', version: 1, type: S.type, params: S.params }, null, 2);
+const usesImage = () => S.type === 'relief' || (S.type === 'ring' && String(S.params.signetFace || '').startsWith('image'));
+const projectJson = () => JSON.stringify({ app: 'paloan-jewelry-cad', version: 2, type: S.type, params: S.params, image: usesImage() ? exportField() : undefined }, null, 2);
 $('#btnSaveProj').onclick = () => download(`paloan-${S.type}-${Date.now()}.json`, projectJson(), 'application/json');
 $('#fileProj').onchange = async (e) => {
   const fl = e.target.files[0]; if (!fl) return;
-  try { const j = JSON.parse(await fl.text()); if (!SCHEMAS[j.type]) throw new Error('Not a Paloan project'); setType(j.type, j.params); toast('Project loaded'); }
+  try { const j = JSON.parse(await fl.text()); if (!SCHEMAS[j.type]) throw new Error('Not a Paloan project'); if (j.image) importField(j.image); setType(j.type, j.params); toast('Project loaded'); }
   catch (err) { toast('Open failed: ' + err.message); }
 };
 function saveHash() {
@@ -419,8 +447,26 @@ $('#btnStl').onclick = () => download(baseName() + '-metal.stl', new Blob([new S
 $('#btnStlAll').onclick = () => download(baseName() + '.stl', new Blob([new STLExporter().parse(exportGroup(false), { binary: true })]));
 $('#btnObj').onclick = () => download(baseName() + '.obj', new OBJExporter().parse(exportGroup(false)));
 $('#btnGlb').onclick = () => new GLTFExporter().parse(exportGroup(false), (r) => download(baseName() + '.glb', new Blob([r])), (e) => toast('GLB error ' + e), { binary: true });
-$('#btnRhinoPy').onclick = async () => { try { download(baseName() + '.py', await rhinoScript(S.type, S.params), 'text/x-python'); } catch (e) { toast(e.message); } };
-$('#btnCopyPy').onclick = async () => { try { await navigator.clipboard.writeText(await rhinoScript(S.type, S.params)); toast('Rhino script copied'); } catch (e) { toast(e.message); } };
+/** Geometry Rhino cannot rebuild from parameters alone (image reliefs, text outlines, engraving cutters). */
+function rhinoExtras() {
+  const q = (a) => Array.from(a, (x) => Math.round(x * 1000) / 1000);
+  const meshOf = (g) => { const h = g.index ? g : g.toNonIndexed(); const idx = h.index ? Array.from(h.index.array) : [...Array(h.attributes.position.count).keys()]; return { v: q(h.attributes.position.array), f: idx }; };
+  const extra = { meshes: [], outlines: [] };
+  let src = S.model;
+  if (S.type === 'relief' && S.params.res > 110) src = generate(S.type, { ...S.params, res: 110 }, { csg: true });
+  if (!src) return extra;
+  for (const part of src.parts) {
+    if (part.layer === 'Body::Relief' || part.name === 'Signet relief') part.pieces.forEach((g) => extra.meshes.push({ layer: 'Metal::' + part.layer.replace('Shank::', 'Shank::'), name: part.name, kind: 'metal', ...meshOf(g) }));
+    if (part.layer.startsWith('Shank::Signet') && part.name.startsWith('Monogram')) part.pieces.forEach((g) => extra.meshes.push({ layer: 'Metal::Shank::Signet', name: part.name, kind: 'metal', ...meshOf(g) }));
+  }
+  for (const c of src.cutters) if (c.type === 'engrave') [].concat(c.geometry).forEach((g) => extra.meshes.push({ layer: 'Cutters::Engraving', name: 'Engraving cutter', kind: 'cutter', ...meshOf(g) }));
+  if (src.meta.export?.outlines) extra.outlines = src.meta.export.outlines;
+  if (S.type === 'relief') extra.reliefTop = src.meta.height / 2;
+  return extra;
+}
+const pyScript = () => rhinoScript(S.type, S.params, rhinoExtras());
+$('#btnRhinoPy').onclick = async () => { try { download(baseName() + '.py', await pyScript(), 'text/x-python'); } catch (e) { toast(e.message); } };
+$('#btnCopyPy').onclick = async () => { try { await navigator.clipboard.writeText(await pyScript()); toast('Rhino script copied'); } catch (e) { toast(e.message); } };
 $('#btnCopyJson').onclick = async () => { try { await navigator.clipboard.writeText(JSON.stringify({ type: S.type, ...S.params })); toast('Params JSON copied — paste into the GhPython “P” input'); } catch (e) { toast(e.message); } };
 $('#btnReportMd').onclick = () => download(baseName() + '-report.md', reportText(), 'text/markdown');
 $('#btnPrint').onclick = () => { setTab('report'); renderReport(); setTimeout(() => print(), 50); };
@@ -568,6 +614,45 @@ function renderMeshPanel() {
   if (r.ring) $('#btnMeshRing').onclick = () => { setTab('design'); S.hidden.clear(); setType('ring', { ...S.params, ringSize: Math.round(r.ring.usSize * 4) / 4, metal: S.params.metal || '18ky' }); toast(`Ring rebuilt at US ${Math.round(r.ring.usSize * 4) / 4} — now match the head and style.`); };
 }
 
+/* ============================== HISTORY / TOOLS ============================== */
+const hist = { stack: [], pos: -1, lock: false };
+function pushHistory() {
+  if (hist.lock) return;
+  const snap = JSON.stringify({ t: S.type, p: S.params });
+  if (hist.stack[hist.pos] === snap) return;
+  hist.stack = hist.stack.slice(0, hist.pos + 1);
+  hist.stack.push(snap);
+  if (hist.stack.length > 80) hist.stack.shift();
+  hist.pos = hist.stack.length - 1;
+}
+function stepHistory(d) {
+  const np = hist.pos + d;
+  if (np < 0 || np >= hist.stack.length) return toast(d < 0 ? 'Nothing to undo' : 'Nothing to redo');
+  hist.pos = np;
+  const j = JSON.parse(hist.stack[np]);
+  hist.lock = true;
+  if (j.t !== S.type) setType(j.t, j.p); else { S.params = j.p; syncForm(); rebuild(); }
+  hist.lock = false;
+}
+$('#btnUndo').onclick = () => stepHistory(-1);
+$('#btnRedo').onclick = () => stepHistory(1);
+window.addEventListener('keydown', (e) => {
+  if (e.target.matches('input, textarea, select')) return;
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); stepHistory(e.shiftKey ? 1 : -1); }
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') { e.preventDefault(); stepHistory(1); }
+});
+$('#tglSpin').onclick = (e) => { controls.autoRotate = !controls.autoRotate; controls.autoRotateSpeed = 2.2; e.currentTarget.classList.toggle('on', controls.autoRotate); };
+$('#fileFont').onchange = async (e) => {
+  const fl = e.target.files[0]; if (!fl) return;
+  try {
+    const key = await registerFontFile(fl);
+    if (S.type === 'name') S.params.font = key;
+    else if (S.type === 'ring' && String(S.params.signetFace).startsWith('initials')) S.params.signetFont = key;
+    else if (S.type === 'ring' && S.params.engraveText) S.params.engraveFont = key;
+    renderForm(); rebuild(); toast(`Font “${fl.name}” added — choose it in any font menu.`);
+  } catch (err) { toast('Font error: ' + err.message); }
+};
+
 /* ============================== MISC ============================== */
 let toastT = 0;
 function toast(t) { const el = $('#toast'); el.textContent = t; el.classList.add('on'); clearTimeout(toastT); toastT = setTimeout(() => el.classList.remove('on'), 3200); }
@@ -582,6 +667,9 @@ window.addEventListener('error', (e) => console.error(e.error || e.message));
   setType(t, p);
   setTimeout(() => fitView(), 60);
 })();
+
+initImageTab({ setType: (t, p) => { S.hidden.clear(); setType(t, { ...defaultsFor(t), metal: S.params.metal, ...p }); }, setTab, toast, md, runAI, defaultsFor, getParams: () => S.params, getType: () => S.type });
+initVariations({ getState: () => ({ type: S.type, params: S.params }), apply: (t, p) => { S.hidden.clear(); setType(t, p); }, toast, generate, metalMat, stoneMat, scene });
 
 // expose for debugging / automation
 window.PJC = { S, generate, measure, validate, setType, fitView, root, scene, camera, renderer };

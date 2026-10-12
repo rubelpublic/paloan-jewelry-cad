@@ -5,10 +5,23 @@ import { Brush, Evaluator, SUBTRACTION } from 'three-bvh-csg';
 import { buildRing } from './geom/ring.js';
 import { buildPendant } from './geom/pendant.js';
 import { buildEarring, buildBangle, buildChain } from './geom/others.js';
+import { buildRelief } from './geom/relief.js';
+import { buildName } from './geom/text.js';
+import { ensureFont, getFont } from './fonts.js';
 import { merge, signedVolume, surfaceArea } from './geom/util.js';
 import { METALS, GEMS } from './data.js';
 
-export const BUILDERS = { ring: buildRing, pendant: buildPendant, earring: buildEarring, bangle: buildBangle, chain: buildChain };
+export const BUILDERS = { ring: buildRing, pendant: buildPendant, earring: buildEarring, bangle: buildBangle, chain: buildChain, relief: buildRelief, name: buildName };
+
+/** Fonts a design needs before it can be built synchronously. */
+export function fontsNeeded(type, p) {
+  const f = [];
+  if (type === 'name') f.push(p.font);
+  if (type === 'ring' && p.shankStyle === 'signet' && String(p.signetFace || '').startsWith('initials')) f.push(p.signetFont);
+  if (type === 'ring' && p.engraveText && p.engraveText.trim()) f.push(p.engraveFont);
+  return f.filter((k) => k && !getFont(k));
+}
+export async function prepare(type, p) { await Promise.all(fontsNeeded(type, p).map((k) => ensureFont(k))); }
 
 const evaluator = new Evaluator();
 evaluator.attributes = ['position', 'normal'];
@@ -45,6 +58,7 @@ export function generate(type, params, { csg = true } = {}) {
   const model = build(params);
   model.type = type;
   model.booleans = [];
+  if (params.headMetal && params.headMetal !== 'same') for (const part of model.parts) if (part.kind === 'metal' && part.layer.startsWith('Head')) part.metal = params.headMetal;
   const asGeo = (c) => (Array.isArray(c.geometry) ? merge(c.geometry, 0.1) : c.geometry);
   if (csg && params.seatCut !== false) {
     for (const cut of model.cutters.filter((c) => c.type === 'seat')) {
@@ -61,7 +75,7 @@ export function generate(type, params, { csg = true } = {}) {
   }
   delete model.meta.haloCutters;
   if (csg) {
-    const order = { hollow: 0, light: 1, openwork: 2 };
+    const order = { hollow: 0, light: 1, openwork: 2, engrave: 3 };
     for (const cut of model.cutters.filter((c) => c.target).sort((a, b) => order[a.type] - order[b.type])) {
       const g = asGeo(cut);
       for (const part of model.parts) if (part.csgTarget === cut.target) {
@@ -119,7 +133,7 @@ export function unionVolume(geoms, res = 200) {
 
 /** Measurements: union metal volume, weights per alloy, stone carats, bbox, areas, per-part breakdown. */
 export function measure(model, metalKey, { res = 200 } = {}) {
-  const metalShells = [], parts = [];
+  const groups = new Map(), parts = [];
   let analytic = 0, stoneCt = 0, area = 0;
   const box = new THREE.Box3();
   for (const part of model.parts) {
@@ -127,7 +141,7 @@ export function measure(model, metalKey, { res = 200 } = {}) {
     for (const g of part.pieces) { v += Math.abs(signedVolume(g)); box.union(boxOf(g)); }
     if (part.kind === 'metal') {
       if (part.analyticVolume) { analytic += part.analyticVolume; v = part.analyticVolume; }
-      else metalShells.push(...part.pieces);
+      else { const k = part.metal || metalKey; if (!groups.has(k)) groups.set(k, []); groups.get(k).push(...part.pieces); }
       for (const g of part.pieces) area += surfaceArea(g);
     } else {
       const gem = GEMS[part.gem] || GEMS.diamond;
@@ -135,13 +149,21 @@ export function measure(model, metalKey, { res = 200 } = {}) {
     }
     parts.push({ name: part.name, layer: part.layer, kind: part.kind, volume: v, pieces: part.pieces.length });
   }
-  const union = unionVolume(metalShells, res) + analytic;
-  const metal = METALS[metalKey] || METALS['18ky'];
-  let grams = (union * metal.density) / 1000;
+  let union = analytic, grams = (analytic * (METALS[metalKey] || METALS['18ky']).density) / 1000;
+  const byMetal = {};
+  for (const [k, shells] of groups) {
+    const v = unionVolume(shells, res);
+    union += v;
+    const g = (v * (METALS[k] || METALS['18ky']).density) / 1000;
+    grams += g;
+    byMetal[k] = (byMetal[k] || 0) + g;
+  }
+  if (analytic) byMetal[metalKey] = (byMetal[metalKey] || 0) + (analytic * (METALS[metalKey] || METALS['18ky']).density) / 1000;
   if (model.meta.pair) grams *= 2;
   if (model.meta.claspWeight) grams += model.meta.claspWeight * metal.density / METALS['14ky'].density;
   const size = box.getSize(new THREE.Vector3());
-  return { volume: union, grams, stoneCt: stoneCt * (model.meta.pair ? 2 : 1), area, bbox: { x: size.x, y: size.y, z: size.z }, parts, metal: metalKey, pair: !!model.meta.pair };
+  if (model.meta.pair) for (const k in byMetal) byMetal[k] *= 2;
+  return { volume: union, grams, byMetal, stoneCt: stoneCt * (model.meta.pair ? 2 : 1), area, bbox: { x: size.x, y: size.y, z: size.z }, parts, metal: metalKey, pair: !!model.meta.pair };
 }
 
 export const weightIn = (volume, key, pair) => (volume * (METALS[key] || METALS['18ky']).density / 1000) * (pair ? 2 : 1);

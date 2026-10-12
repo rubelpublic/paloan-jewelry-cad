@@ -30,6 +30,7 @@
     </div>
     <nav class="tabs" role="tablist">
       <button data-tab="design" class="on">Design</button>
+      <button data-tab="image">Image → 3D</button>
       <button data-tab="ai">AI Brief</button>
       <button data-tab="mesh">Mesh Lab</button>
       <button data-tab="rhino">Rhino / GH</button>
@@ -62,6 +63,10 @@
         </div>
         <form id="params" autocomplete="off"></form>
         <div class="btnrow">
+          <label class="file small">+ Add font (TTF/OTF)<input type="file" id="fileFont" accept=".ttf,.otf" /></label>
+          <button id="btnVariations">✦ 6 design variations</button>
+        </div>
+        <div class="btnrow">
           <button id="btnOptimize" class="primary">Optimize to target weight</button>
           <button id="btnReset">Reset</button>
         </div>
@@ -69,6 +74,49 @@
           <button id="btnSaveProj">Save project</button>
           <label class="file small">Open project<input type="file" id="fileProj" accept=".json" /></label>
           <button id="btnShare">Copy share link</button>
+        </div>
+      </section>
+
+      <section data-panel="image">
+        <h3>Image → 3D</h3>
+        <p class="muted">Upload a photo, sketch, logo, AI render or transparent PNG. Paloan removes the background, reads the shape and shading, and builds real castable 3D: relief charms, silhouette pendants, coins, signet faces — or recognises the jewelry type, metal and stone from a product photo.</p>
+        <label class="drop" id="dropImg3d">Drop an image, paste (Ctrl+V) or <u>browse / camera</u><input type="file" id="fileImg3d" accept="image/*" /></label>
+        <div class="img3d-preview hidden" id="img3dWrap">
+          <canvas id="img3dCanvas"></canvas>
+          <div class="seg"><button data-view3d="mask" class="on">Mask</button><button data-view3d="height">Height</button><button data-view3d="orig">Original</button></div>
+        </div>
+        <fieldset id="img3dControls" class="hidden">
+          <legend>Background removal</legend>
+          <div class="row2">
+            <label>Detect by <select id="i3Mode"><option value="auto">Auto</option><option value="color">Colour difference</option><option value="luma">Brightness</option><option value="alpha">PNG transparency</option></select></label>
+            <label>Smooth <input id="i3Smooth" type="number" min="0" max="4" step="1" value="1" /></label>
+          </div>
+          <div class="f"><span>Threshold <em class="muted" id="i3ThrVal">auto</em></span><input type="range" id="i3Thr" min="0" max="1" step="0.01" value="0" style="grid-column:1/-1" /></div>
+          <label class="chk"><input type="checkbox" id="i3Auto" checked /> Automatic threshold</label>
+          <label class="chk"><input type="checkbox" id="i3Invert" /> Invert mask (dark object on light? try this)</label>
+          <label class="chk"><input type="checkbox" id="i3Fill" checked /> Fill holes (uncheck to keep pierced openings / ring holes)</label>
+          <label class="chk"><input type="checkbox" id="i3Largest" checked /> Remove small specks</label>
+        </fieldset>
+        <fieldset id="img3dRelief" class="hidden">
+          <legend>Relief from shading</legend>
+          <div class="row2">
+            <label>Detail blur <input id="i3Blur" type="number" min="0" max="5" step="1" value="1" /></label>
+            <label>Contrast <input id="i3Contrast" type="number" min="0.3" max="3" step="0.1" value="1" /></label>
+          </div>
+          <label class="chk"><input type="checkbox" id="i3HInvert" /> Dark areas raised (invert height)</label>
+          <label>Width of the piece (mm) <input id="i3Width" type="number" min="5" max="70" step="0.5" value="22" /></label>
+        </fieldset>
+        <div id="img3dActions" class="hidden">
+          <h4>Convert to</h4>
+          <div class="grid2">
+            <button data-conv="relief" class="primary">Relief charm / pendant</button>
+            <button data-conv="silhouette">Silhouette pendant (+ stones, openwork)</button>
+            <button data-conv="coin">Coin / medallion</button>
+            <button data-conv="signet">Signet ring face</button>
+            <button data-conv="detect">Auto-detect jewelry from photo</button>
+            <button data-conv="ai">AI interpret (Claude)</button>
+          </div>
+          <div id="img3dInfo" class="md small"></div>
         </div>
       </section>
 
@@ -158,6 +206,10 @@
         <button id="tglSection" title="Section cut">◐</button>
         <button id="tglStones" title="Hide stones" class="on">◆</button>
         <button id="tglDims" title="Dimensions" class="on">⟷</button>
+        <button id="tglSpin" title="Turntable">⟳</button>
+        <span class="sep"></span>
+        <button id="btnUndo" title="Undo (Ctrl+Z)">↶</button>
+        <button id="btnRedo" title="Redo (Ctrl+Y)">↷</button>
         <label class="file small" title="Reference image overlay">Ref<input type="file" id="fileRef" accept="image/*" /></label>
         <input type="range" id="refOpacity" min="0" max="1" step="0.05" value="0.4" title="Overlay opacity" />
       </div>
@@ -196,6 +248,14 @@
       <label>Model <select id="aiModel"></select></label>
       <p class="muted small">Server-side refusal fallback is enabled, so a declined request is retried automatically on a fallback model.</p>
       <div class="btnrow"><button value="cancel">Cancel</button><button id="btnSaveKey" value="ok" class="primary">Save</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="dlgVariations" class="wide">
+    <form method="dialog">
+      <div class="card-h"><h3>Design variations</h3><span><button type="button" id="btnMoreVar">↻ More</button> <button value="close">Close</button></span></div>
+      <p class="muted small">Six manufacturable directions based on your current piece. Click one to continue designing from it.</p>
+      <div id="varGrid" class="var-grid"></div>
     </form>
   </dialog>
 

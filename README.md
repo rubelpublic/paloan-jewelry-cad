@@ -11,7 +11,11 @@ AI image generators make beautiful jewelry that can't be manufactured: wrong pro
 
 | Capability | In the app |
 |---|---|
-| **Jewelry design intelligence** | Rings, pendants and charms, stud/hoop/drop earrings, bangles and cuffs, chains. Shank, gallery, basket, prongs, bezel, halo, cathedral, pavé, milgrain, bail, hinge and post are each a separate editable part on a layer tree. |
+| **Image → 3D** | Upload, paste or photograph any image (product shot, sketch, logo, AI render, transparent PNG). Paloan removes the background, traces the outline and turns shading into height. It then builds **relief charms, silhouette pendants, coins/medallions or signet-ring faces** as watertight, castable solids. It can also **auto-detect** the jewelry type, metal colour, stone colour, stone size and spikes from a photo, or send the image to Claude. |
+| **Text and personalisation** | Name necklaces and name bars in 10 built-in fonts (Pacifico, Great Vibes, Dancing Script, Cinzel, …) or **any uploaded TTF/OTF**. Includes a connectivity check, floating i-dot removal, underline/plate connectors and chain loops. Signet monograms (engraved or raised) and **inside-ring engraving** wrapped onto the finger surface. |
+| **More ring options** | Signet rings (oval/cushion/octagon/square/shield tops), three-stone/trilogy with pear or emerald sides, half and full eternity, **two-tone metal** (separate head alloy, weighed separately), and finishes: polished, satin, matte, brushed, oxidised. |
+| **Design workflow** | Undo/redo (Ctrl+Z / Ctrl+Y), turntable, and **6 instant design variations** rendered as thumbnails (click one to continue from it). |
+| **Jewelry design intelligence** | Rings, pendants and charms, stud/hoop/drop earrings, bangles and cuffs, chains, image reliefs, name necklaces. Shank, gallery, basket, prongs, bezel, halo, cathedral, pavé, milgrain, bail, hinge and post are each a separate editable part on a layer tree. |
 | **Style intelligence** | 13 style presets (gothic, contemporary, luxury, hammered, organic, sculptural, floral, art deco, vintage, architectural, minimal, tribal, classic) that translate into real geometry: spikes, lancet openwork, knife edges, Worley-hammered dents, vines and coils, twists, milgrain. |
 | **Stones and settings** | 11 cuts (round, oval, cushion, princess, emerald, asscher, radiant, pear, marquise, heart, trillion) and 10 gem materials. Converts carats to mm. Places V-prongs on the points of each cut, sizes prongs from the stone, and cuts real boolean seats into prongs, bezels and halo frames. |
 | **Manufacturability validation** | Rules engine with pass/warn/fail results and fixes: shank and wall thickness, prong Ø, seat depth, culet clearance, head height, spike stability, openwork bridges, hollow walls, halo spacing, hinge clearance, link articulation, ear posts, bails. Gives a score out of 100. |
@@ -35,9 +39,10 @@ python tools/serve.py        # http://localhost:8765
 The app is static HTML and ES modules with no build step. Three.js, three-mesh-bvh and three-bvh-csg load from jsDelivr.
 
 ### Typical workflows
-1. **AI image → CAD.** Go to *AI Brief*, drop the image, describe it, then click *Ask Claude* (or *Build offline*). Review the checks, click *Optimize to target weight*, and download the Rhino `.py` from *Rhino / GH*.
-2. **AI mesh → NURBS.** Go to *Mesh Lab* and drop the STL/GLB. Read the zones and the plan, download the plan, then click *Rebuild as parametric ring* if a ring was detected.
-3. **Design from scratch.** Pick a *Template* or *Design style*, then tune the parameters. Weight, checks and the construction workflow update live.
+1. **Photo or logo → 3D.** Go to *Image → 3D*, drop the image, then choose *Relief charm*, *Silhouette pendant*, *Coin*, *Signet face* or *Auto-detect*.
+2. **AI image → CAD.** Go to *AI Brief*, drop the image, describe it, then click *Ask Claude* (or *Build offline*). Review the checks, click *Optimize to target weight*, and download the Rhino `.py` from *Rhino / GH*.
+3. **AI mesh → NURBS.** Go to *Mesh Lab* and drop the STL/GLB. Read the zones and the plan, download the plan, then click *Rebuild as parametric ring* if a ring was detected.
+4. **Design from scratch.** Pick a *Template* or *Design style*, then tune the parameters. Weight, checks and the construction workflow update live.
 
 ## Python toolkit
 Pure Python 3.8+ with no dependencies. Pillow is needed only for carving reliefs.

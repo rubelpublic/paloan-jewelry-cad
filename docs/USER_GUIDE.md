@@ -8,6 +8,33 @@
 - **Save project / Open project** (JSON) and **Copy share link** (the design is encoded in the URL).
 - Pendant outline **Custom SVG**: upload an SVG; the largest closed shape becomes the outline, scaled to the height/width sliders.
 
+## 1b. Image → 3D
+- **Add an image:** drag it in, paste it (Ctrl+V anywhere in the app), or tap *browse / camera* on a phone.
+- **Background removal:** *Auto* uses PNG transparency when the image has it, otherwise the colour difference from the border. Adjust the threshold, invert the mask for dark objects on light backgrounds, untick *Fill holes* to keep piercings or a ring's finger hole, and use *Smooth* to clean ragged edges. The preview shows the mask, the traced outline (blue) and the height map.
+- **Relief from shading:** detail blur, contrast and invert control how the image brightness becomes height.
+- **Convert to:**
+  - *Relief charm* turns the image silhouette into a relief with a bail.
+  - *Silhouette pendant* uses the outline as a pendant shape, so stones, openwork, spikes and hollowing all work on it.
+  - *Coin / medallion* is a round coin with a raised border.
+  - *Signet ring face* engraves the image into a signet top.
+  - *Auto-detect* reads type, metal, stone and size from a product photo.
+  - *AI interpret* sends the image to Claude.
+- The image is saved inside project files (*Save project*). Share links don't carry the image.
+
+## 1c. Text, signets and more ring options
+- **Name necklace** (Jewelry type → Name / text pendant):
+  - Type the name and pick a font, or upload your own TTF/OTF with *+ Add font*.
+  - Script fonts connect by themselves. Block fonts need an *Underline bar* or a *Back plate*.
+  - *Floating i/j dots → Remove* keeps the piece castable in one part.
+  - The checks show whether everything is one connected piece and how thin the strokes are.
+- **Signet:** Shank style → Signet. Choose the top shape and size, then the face: plain, engraved or raised initials, or an engraved or raised image from Image → 3D.
+- **Three-stone:** Side stones → Three-stone, with side cut, size ratio and setting. Pear and marquise sides point towards the centre stone.
+- **Eternity:** Pavé & eternity → Half or Full eternity. Full eternity rings can't be resized.
+- **Inside engraving:** Engraving → text, font, letter height and depth. The text is wrapped onto the finger surface and cut by a boolean.
+- **Two-tone:** Material → Head / setting metal. Weights are calculated per alloy.
+- **Finish:** polished, satin, matte, brushed or oxidised (shown in the viewer and noted in the report).
+- **Undo/redo** (↶ ↷, Ctrl+Z / Ctrl+Y), **turntable** (⟳), and **✦ 6 design variations**.
+
 ## 2. Right panel
 - **Weight card**: finished weight in the chosen alloy (pairs for earrings), metal volume (exact union of all parts), cast weight (+4 %), resin/wax model weight, surface area, total carats, bounding box, metal cost (set price on the Report tab).
 - **Manufacturability**: every check with pass / warn / fail, the measured value and the fix. Score = 100 − 20 per fail − 6 per warn.

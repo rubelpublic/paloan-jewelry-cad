@@ -4,6 +4,9 @@ import { PROFILES } from './geom/util.js';
 import { RING_DEFAULTS } from './geom/ring.js';
 import { PENDANT_DEFAULTS } from './geom/pendant.js';
 import { EARRING_DEFAULTS, BANGLE_DEFAULTS, CHAIN_DEFAULTS } from './geom/others.js';
+import { RELIEF_DEFAULTS } from './geom/relief.js';
+import { NAME_DEFAULTS } from './geom/text.js';
+import { fontOptions } from './fonts.js';
 
 const o = (obj, key = 'label') => Object.fromEntries(Object.entries(obj).map(([k, v]) => [k, typeof v === 'string' ? v : v[key]]));
 const metalOpts = o(METALS), gemOpts = o(GEMS), cutOpts = o(CUTS), profileOpts = o(PROFILES);
@@ -16,7 +19,10 @@ const COMMON = [
   { g: 'Material', k: 'metal', label: 'Metal / alloy', t: 'select', opts: metalOpts },
   { g: 'Material', k: 'style', label: 'Design style', t: 'select', opts: styleOpts, note: 'Applies a style preset' },
   { g: 'Material', k: 'targetWeight', label: 'Target weight (g, 0 = none)', t: 'number', min: 0, max: 200, step: 0.1 },
+  { g: 'Material', k: 'finish', label: 'Surface finish', t: 'select', opts: { polished: 'High polish', satin: 'Satin', matte: 'Matte / sandblast', brushed: 'Brushed', oxidized: 'Oxidised (blackened)' } },
 ];
+const TWO_TONE = { g: 'Material', k: 'headMetal', label: 'Head / setting metal (two-tone)', t: 'select', opts: { same: 'Same as body', ...metalOpts } };
+const FONT_OPTS = () => fontOptions();
 const STONE = (show = () => true) => [
   { g: 'Center stone', k: 'headType', label: 'Setting', t: 'select', opts: { none: 'No stone', prong: 'Prong', bezel: 'Bezel', halo: 'Halo + prongs' } },
   { g: 'Center stone', k: 'cut', label: 'Cut', t: 'select', opts: cutOpts, show: and(show, not('headType', 'none')) },
@@ -39,7 +45,8 @@ export const SCHEMAS = {
     fields: [
       ...COMMON,
       { g: 'Shank', k: 'ringSize', label: 'Ring size (US)', t: 'range', min: 2, max: 15, step: 0.25 },
-      { g: 'Shank', k: 'shankStyle', label: 'Shank style', t: 'select', opts: { classic: 'Classic', split: 'Split shank', bypass: 'Bypass', twisted: 'Twisted strands' } },
+      TWO_TONE,
+      { g: 'Shank', k: 'shankStyle', label: 'Shank style', t: 'select', opts: { classic: 'Classic', split: 'Split shank', bypass: 'Bypass', twisted: 'Twisted strands', signet: 'Signet (flat top)' } },
       { g: 'Shank', k: 'profile', label: 'Profile', t: 'select', opts: profileOpts, show: not('shankStyle', 'twisted') },
       { g: 'Shank', k: 'widthTop', label: 'Width at top', t: 'range', min: 1.2, max: 14, step: 0.05, unit: 'mm' },
       { g: 'Shank', k: 'widthBottom', label: 'Width at bottom', t: 'range', min: 1.2, max: 14, step: 0.05, unit: 'mm' },
@@ -50,12 +57,25 @@ export const SCHEMAS = {
       { g: 'Surface', k: 'texture', label: 'Texture', t: 'select', opts: { none: 'Polished', hammered: 'Hammered / beaten', organic: 'Organic flow', ridged: 'Ridged (tribal)', bark: 'Bark', florentine: 'Florentine lines' } },
       { g: 'Surface', k: 'textureDepth', label: 'Texture depth', t: 'range', min: 0.03, max: 0.5, step: 0.01, unit: 'mm', show: not('texture', 'none') },
       { g: 'Surface', k: 'textureScale', label: 'Texture scale', t: 'range', min: 0.4, max: 4, step: 0.1, show: not('texture', 'none') },
-      ...STONE(),
+      { g: 'Signet', k: 'signetShape', label: 'Signet top shape', t: 'select', opts: { oval: 'Oval', round: 'Round', cushion: 'Cushion', square: 'Square', octagon: 'Octagon', shield: 'Shield' }, show: has('shankStyle', 'signet') },
+      { g: 'Signet', k: 'signetW', label: 'Top width (across finger)', t: 'range', min: 6, max: 22, step: 0.1, unit: 'mm', show: has('shankStyle', 'signet') },
+      { g: 'Signet', k: 'signetL', label: 'Top length (along finger)', t: 'range', min: 5, max: 20, step: 0.1, unit: 'mm', show: has('shankStyle', 'signet') },
+      { g: 'Signet', k: 'signetT', label: 'Plate height above band', t: 'range', min: 0.8, max: 4, step: 0.05, unit: 'mm', show: has('shankStyle', 'signet') },
+      { g: 'Signet', k: 'signetFace', label: 'Face', t: 'select', opts: { plain: 'Plain / polished', 'initials-engrave': 'Initials engraved', 'initials-emboss': 'Initials raised', 'image-engrave': 'Image engraved (Image → 3D)', 'image-emboss': 'Image relief (Image → 3D)' }, show: has('shankStyle', 'signet') },
+      { g: 'Signet', k: 'signetText', label: 'Initials / monogram', t: 'text', show: (p) => p.shankStyle === 'signet' && String(p.signetFace).startsWith('initials') },
+      { g: 'Signet', k: 'signetFont', label: 'Monogram font', t: 'select', opts: FONT_OPTS, show: (p) => p.shankStyle === 'signet' && String(p.signetFace).startsWith('initials') },
+      { g: 'Signet', k: 'faceDepth', label: 'Engrave / relief depth', t: 'range', min: 0.1, max: 1.5, step: 0.05, unit: 'mm', show: (p) => p.shankStyle === 'signet' && p.signetFace !== 'plain' },
+      ...STONE((p) => p.shankStyle !== 'signet').map((f) => (f.k === 'headType' ? { ...f, show: not('shankStyle', 'signet') } : f)),
+      { g: 'Side stones', k: 'sideStones', label: 'Side stones', t: 'select', opts: { none: 'None', 'three-stone': 'Three-stone (trilogy)' }, show: and(not('headType', 'none'), not('shankStyle', 'signet')) },
+      { g: 'Side stones', k: 'sideCut', label: 'Side stone cut', t: 'select', opts: cutOpts, show: has('sideStones', 'three-stone') },
+      { g: 'Side stones', k: 'sideRatio', label: 'Side size (× centre width)', t: 'range', min: 0.3, max: 1, step: 0.01, show: has('sideStones', 'three-stone') },
+      { g: 'Side stones', k: 'sideHead', label: 'Side setting', t: 'select', opts: { prong: 'Prong', bezel: 'Bezel' }, show: has('sideStones', 'three-stone') },
       { g: 'Head', k: 'galleryLift', label: 'Gallery lift (culet → shank)', t: 'range', min: 0.2, max: 4, step: 0.05, unit: 'mm', show: not('headType', 'none') },
       { g: 'Head', k: 'rails', label: 'Gallery rails', t: 'range', min: 0, max: 2, step: 1, show: has('headType', 'prong', 'halo') },
       { g: 'Head', k: 'cathedral', label: 'Cathedral arches', t: 'check', show: has('headType', 'prong', 'halo') },
-      { g: 'Ornament', k: 'accentCount', label: 'Pavé accents per side', t: 'range', min: 0, max: 12, step: 1 },
-      { g: 'Ornament', k: 'accentSize', label: 'Accent size', t: 'range', min: 0.8, max: 2.5, step: 0.05, unit: 'mm', show: (p) => p.accentCount > 0 },
+      { g: 'Pavé & eternity', k: 'accentMode', label: 'Stones along the band', t: 'select', opts: { shoulders: 'Shoulders (pavé)', 'half-eternity': 'Half eternity', 'full-eternity': 'Full eternity' } },
+      { g: 'Pavé & eternity', k: 'accentCount', label: 'Pavé stones per side', t: 'range', min: 0, max: 12, step: 1, show: has('accentMode', 'shoulders') },
+      { g: 'Pavé & eternity', k: 'accentSize', label: 'Accent stone size', t: 'range', min: 0.8, max: 3.5, step: 0.05, unit: 'mm', show: (p) => p.accentCount > 0 || p.accentMode !== 'shoulders' },
       { g: 'Ornament', k: 'milgrain', label: 'Milgrain edges', t: 'check' },
       { g: 'Ornament', k: 'spikes', label: 'Spikes', t: 'range', min: 0, max: 40, step: 1 },
       { g: 'Ornament', k: 'spikeRows', label: 'Spike rows', t: 'range', min: 1, max: 2, step: 1, show: (p) => p.spikes > 0 },
@@ -65,16 +85,21 @@ export const SCHEMAS = {
       { g: 'Openwork', k: 'openwork', label: 'Openwork', t: 'select', opts: { none: 'None', arch: 'Gothic lancet', circle: 'Circles', diamond: 'Diamonds', quatrefoil: 'Quatrefoil' }, show: not('shankStyle', 'twisted') },
       { g: 'Openwork', k: 'openCount', label: 'Windows', t: 'range', min: 4, max: 30, step: 1, show: not('openwork', 'none') },
       { g: 'Openwork', k: 'openSize', label: 'Window size (× width)', t: 'range', min: 0.2, max: 0.85, step: 0.01, show: not('openwork', 'none') },
-      { g: 'Metal saving', k: 'backHollow', label: 'Hollow under-shank', t: 'check', show: has('shankStyle', 'classic') },
-      { g: 'Metal saving', k: 'hollowDepth', label: 'Hollow depth', t: 'range', min: 0.05, max: 2.5, step: 0.01, unit: 'mm', show: (p) => p.backHollow && p.shankStyle === 'classic' },
-      { g: 'Metal saving', k: 'hollowRail', label: 'Side rails', t: 'range', min: 0.4, max: 3, step: 0.05, unit: 'mm', show: (p) => p.backHollow && p.shankStyle === 'classic' },
-      { g: 'Metal saving', k: 'hollowSpan', label: 'Hollow span', t: 'range', min: 40, max: 300, step: 5, unit: '°', show: (p) => p.backHollow && p.shankStyle === 'classic' },
+      { g: 'Metal saving', k: 'backHollow', label: 'Hollow under-shank', t: 'check', show: has('shankStyle', 'classic', 'signet') },
+      { g: 'Metal saving', k: 'hollowDepth', label: 'Hollow depth', t: 'range', min: 0.05, max: 2.5, step: 0.01, unit: 'mm', show: (p) => p.backHollow && ['classic', 'signet'].includes(p.shankStyle) },
+      { g: 'Metal saving', k: 'hollowRail', label: 'Side rails', t: 'range', min: 0.4, max: 3, step: 0.05, unit: 'mm', show: (p) => p.backHollow && ['classic', 'signet'].includes(p.shankStyle) },
+      { g: 'Metal saving', k: 'hollowSpan', label: 'Hollow span', t: 'range', min: 40, max: 300, step: 5, unit: '°', show: (p) => p.backHollow && ['classic', 'signet'].includes(p.shankStyle) },
+      { g: 'Engraving', k: 'engraveText', label: 'Inside engraving text', t: 'text', show: not('shankStyle', 'twisted') },
+      { g: 'Engraving', k: 'engraveFont', label: 'Engraving font', t: 'select', opts: FONT_OPTS, show: (p) => !!p.engraveText },
+      { g: 'Engraving', k: 'engraveSize', label: 'Letter height', t: 'range', min: 0.8, max: 4, step: 0.05, unit: 'mm', show: (p) => !!p.engraveText },
+      { g: 'Engraving', k: 'engraveDepth', label: 'Engraving depth', t: 'range', min: 0.05, max: 0.4, step: 0.01, unit: 'mm', show: (p) => !!p.engraveText },
     ],
   },
   pendant: {
     defaults: { metal: '18ky', style: 'contemporary', targetWeight: 0, ...PENDANT_DEFAULTS },
     fields: [
       ...COMMON,
+      TWO_TONE,
       { g: 'Body', k: 'shape', label: 'Outline', t: 'select', opts: { circle: 'Circle', oval: 'Oval', teardrop: 'Teardrop', heart: 'Heart', cushion: 'Cushion', hexagon: 'Hexagon', shield: 'Shield', star: 'Star', crescent: 'Crescent', cross: 'Cross', 'gothic-cross': 'Gothic cross', custom: 'Custom SVG (upload)' } },
       { g: 'Body', k: 'height', label: 'Height', t: 'range', min: 6, max: 70, step: 0.5, unit: 'mm' },
       { g: 'Body', k: 'width', label: 'Width', t: 'range', min: 5, max: 60, step: 0.5, unit: 'mm' },
@@ -152,6 +177,45 @@ export const SCHEMAS = {
       { g: 'Chain', k: 'linkInnerW', label: 'Link inner width', t: 'range', min: 0.8, max: 8, step: 0.1, unit: 'mm' },
       { g: 'Chain', k: 'lengthCm', label: 'Length', t: 'range', min: 14, max: 90, step: 0.5, unit: 'cm' },
       { g: 'Chain', k: 'claspWeight', label: 'Clasp weight (14K equiv.)', t: 'range', min: 0, max: 3, step: 0.05, unit: 'g' },
+    ],
+  },
+  relief: {
+    defaults: { metal: '18ky', style: 'classic', targetWeight: 0, finish: 'polished', ...RELIEF_DEFAULTS },
+    fields: [
+      ...COMMON.filter((f) => f.k !== 'style'),
+      { g: 'Image relief', k: 'shape', label: 'Outline', t: 'select', opts: { image: 'Image silhouette', circle: 'Coin (circle / oval)', square: 'Rounded square', cushion: 'Cushion', octagon: 'Octagon', hexagon: 'Hexagon', shield: 'Shield', heart: 'Heart' } },
+      { g: 'Image relief', k: 'width', label: 'Width', t: 'range', min: 5, max: 70, step: 0.5, unit: 'mm' },
+      { g: 'Image relief', k: 'lockAspect', label: 'Keep image proportions', t: 'check' },
+      { g: 'Image relief', k: 'height', label: 'Height', t: 'range', min: 5, max: 90, step: 0.5, unit: 'mm', show: (p) => !p.lockAspect || !['image', 'circle', 'square', 'octagon', 'cushion'].includes(p.shape) },
+      { g: 'Image relief', k: 'mode', label: 'Relief type', t: 'select', opts: { emboss: 'Raised relief (bright = high)', engrave: 'Engraved / intaglio', flat: 'Flat silhouette' } },
+      { g: 'Image relief', k: 'depth', label: 'Relief depth', t: 'range', min: 0, max: 3, step: 0.05, unit: 'mm', show: not('mode', 'flat') },
+      { g: 'Image relief', k: 'base', label: 'Base plate thickness', t: 'range', min: 0.5, max: 4, step: 0.05, unit: 'mm' },
+      { g: 'Image relief', k: 'rim', label: 'Raised border width', t: 'range', min: 0, max: 4, step: 0.1, unit: 'mm' },
+      { g: 'Image relief', k: 'rimHeight', label: 'Border height', t: 'range', min: 0.1, max: 3, step: 0.05, unit: 'mm', show: (p) => p.rim > 0 },
+      { g: 'Image relief', k: 'res', label: 'Detail (grid cells)', t: 'range', min: 60, max: 260, step: 10 },
+      { g: 'Bail', k: 'bail', label: 'Bail', t: 'select', opts: { loop: 'Loop', hidden: 'Hidden (back)', none: 'None (charm / inlay)' } },
+      { g: 'Bail', k: 'bailInner', label: 'Bail opening', t: 'range', min: 1.5, max: 8, step: 0.1, unit: 'mm', show: not('bail', 'none') },
+      { g: 'Bail', k: 'bailWire', label: 'Bail wire', t: 'range', min: 0.6, max: 2.5, step: 0.05, unit: 'mm', show: not('bail', 'none') },
+      { g: 'Metal saving', k: 'backRecess', label: 'Recessed back (hollow)', t: 'check' },
+    ],
+  },
+  name: {
+    defaults: { metal: '14ky', style: 'classic', targetWeight: 0, finish: 'polished', ...NAME_DEFAULTS },
+    fields: [
+      ...COMMON.filter((f) => f.k !== 'style'),
+      { g: 'Text', k: 'text', label: 'Name / text', t: 'text' },
+      { g: 'Text', k: 'font', label: 'Font', t: 'select', opts: FONT_OPTS },
+      { g: 'Text', k: 'letterHeight', label: 'Letter height', t: 'range', min: 4, max: 30, step: 0.5, unit: 'mm' },
+      { g: 'Text', k: 'thickness', label: 'Thickness', t: 'range', min: 0.6, max: 3, step: 0.05, unit: 'mm' },
+      { g: 'Text', k: 'spacing', label: 'Extra letter spacing', t: 'range', min: -1, max: 3, step: 0.05, unit: 'mm' },
+      { g: 'Connection', k: 'dots', label: 'Floating i / j dots & accents', t: 'select', opts: { remove: 'Remove (one-piece casting)', keep: 'Keep (solder on separately)' } },
+      { g: 'Connection', k: 'bar', label: 'Connect letters with', t: 'select', opts: { none: 'Nothing (script font)', underline: 'Underline bar', plate: 'Back plate (tag)' } },
+      { g: 'Connection', k: 'barHeight', label: 'Bar height', t: 'range', min: 0.6, max: 3, step: 0.05, unit: 'mm', show: has('bar', 'underline') },
+      { g: 'Connection', k: 'plateMargin', label: 'Plate margin', t: 'range', min: 0.6, max: 5, step: 0.1, unit: 'mm', show: has('bar', 'plate') },
+      { g: 'Findings', k: 'bail', label: 'Chain attachment', t: 'select', opts: { ends: 'Loops at both ends (necklace)', top: 'Single bail (pendant)', none: 'None (bracelet bar / brooch)' } },
+      { g: 'Findings', k: 'bailInner', label: 'Loop opening', t: 'range', min: 1.2, max: 6, step: 0.1, unit: 'mm', show: not('bail', 'none') },
+      { g: 'Findings', k: 'bailWire', label: 'Loop wire', t: 'range', min: 0.5, max: 2, step: 0.05, unit: 'mm', show: not('bail', 'none') },
+      { g: 'Findings', k: 'stoneDot', label: 'Accent dot', t: 'check' },
     ],
   },
 };
