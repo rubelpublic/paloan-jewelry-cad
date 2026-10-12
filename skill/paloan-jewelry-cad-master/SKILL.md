@@ -84,6 +84,11 @@ Define the parameter set (with ranges and units), dependency graph (ring size �
 - **Inside engraving:** 1.2–2 mm letters, 0.1–0.2 mm deep, usually laser-engraved after polishing.
 - **Three-stone / eternity / two-tone:** side stones 50–70 % of the centre width, ≥ 0.2 mm clear of the centre head. Full eternity can't be resized. Two-tone parts are cast separately and laser-welded, or selectively plated.
 
+### H. Collets, flush settings and petal crowns
+- **One-layer collet:** sweep a profile (wall 0.6–0.8 mm, taper 0.5–1.5 mm, chamfers 0.1–0.25 mm) around the girdle curve. Lip 0.15–0.35 mm over the girdle; subtract the gem cutter.
+- **Flush / gypsy:** ≥ 0.8–1.0 mm of metal around the girdle, stones ≤ 6 mm. Table just proud of the surface; the setter burnishes metal over the girdle.
+- **Petals (JFR workflow):** draw half the outline and mirror it, draw a cupped cross-section, Sweep2 along the two rails, then lift, curl (Bend/gumball) and ArrayPolar. Inner layers are shorter and more lifted, rotated half a step. Thickness ≥ 0.8 mm, tips ≥ 0.5 mm. For enamel, recess the tops 0.2–0.3 mm (champlevé) and fire after polishing.
+
 ### F. CAD quality review (Capability 9)
 Compare against reference/intent: proportions (width/height ratios, head-to-shank), prong alignment & count, symmetry, stone placement/height, carving depth, openwork spacing, surface continuity (G1/G2 at blends), naked edges. Output a defect list: *what — where — measured vs expected — fix*.
 

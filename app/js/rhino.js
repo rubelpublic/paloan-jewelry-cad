@@ -95,6 +95,15 @@ export function workflow(type, p, meta) {
     `Text “${p.text}” ${f(p.letterHeight)} mm, ${f(p.thickness)} mm thick${p.bar !== 'none' ? `, ${p.bar}` : ''}. Rhino: ${c('TextObject')} (Output = Curves, same font) or use the exported outlines → ${c('ExtrudeCrv')} ${f(p.thickness)} mm → ${c('BooleanUnion')} letters + connector → ${c('FilletEdge')} 0.1 mm.`,
     p.bail === 'ends' ? `Chain loops: ${c('Torus')} Ø ${f(p.bailInner)} mm inner at both ends, in the plane of the text.` : '',
   ]);
+  if (p.headType === 'collet') add('Collet (one-layer)', [`Profile: wall ${f(p.bezelWall)} mm, taper ${f(p.colletTaper)} mm, chamfers ${f(p.chamferA)} / ${f(p.chamferB)} mm, height ${p.colletHeight ? f(p.colletHeight) + ' mm' : 'to the shank'}. ${c('Sweep1')} the profile around the girdle curve (JFR One-layer Collet / MatrixGold Bezel), subtract the gem cutter.`]);
+  if (p.headType === 'flush') add('Flush setting', [`Offset the girdle +${f(p.flushMargin)} mm, ${c('ExtrudeCrv')} a solid button, ${c('BooleanDifference')} the gem so the table sits just proud; the setter hammers the metal over the girdle.`]);
+  if (p.petals > 0) add('Flower petals', [
+    `Draw half a petal outline (${f(p.petalLength)} × ${f(p.petalWidth)} mm, ${p.petalTip} tip) and ${c('Mirror')} it (JFR Horizontal/Vertical Mirror Curve).`,
+    `Draw the cross-section (cupped, ${f(p.petalThick)} mm thick, ${f(p.petalRidge)} mm centre vein) and ${c('Sweep2')} along the two outline rails (Dual Rail).`,
+    `Lift ${f(p.petalLift, 0)}°, curl the tip with ${c('Bend')} / gumball, then ${c('ArrayPolar')} ${p.petals} copies around the stone axis; ${p.petalLayers > 1 ? `add ${p.petalLayers - 1} more layer(s), shorter and more lifted, rotated half a step.` : ''}`,
+    p.petalEnamel !== 'none' ? `Enamel: recess the petal tops 0.2–0.3 mm for ${p.petalEnamel} enamel.` : '',
+  ]);
+  if (p.edits && Object.keys(p.edits).length) add('Manual edits', Object.entries(p.edits).map(([name, e]) => `${name}: ${e.hidden ? 'deleted' : [e.m ? 'transformed (gumball)' : '', e.array > 1 ? `${c('ArrayPolar')} × ${e.array}` : '', e.mirror ? `${c('Mirror')} across YZ` : ''].filter(Boolean).join(', ')}`));
   if (p.headMetal && p.headMetal !== 'same') add('Two-tone', [`Head/settings in ${METALS[p.headMetal]?.label}: keep head parts on their own layer, cast separately and laser-weld, or cast one metal and rhodium/gold-plate selectively.`]);
   add('Production', [
     `Metal: ${METALS[p.metal]?.label}; expected finished weight shown on the right (+4% for cast sprue/polish loss).`,

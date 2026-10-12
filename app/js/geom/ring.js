@@ -3,7 +3,7 @@
 import * as THREE from 'three';
 import { usToDiameter, stoneDimsFromCarat } from '../data.js';
 import { V, sweep, ellipseFrame, superProfile, PROFILES, worley, vnoise, smooth, lerp, clamp, DEG, tube, spike, sphere, merge } from './util.js';
-import { buildHead } from './stone.js';
+import { buildHead, SETTING_DEFAULTS, headOptions } from './stone.js';
 import { signetFace } from './relief.js';
 import { monogram, engravingCutter } from './text.js';
 
@@ -21,6 +21,7 @@ export const RING_DEFAULTS = {
   accentMode: 'shoulders', sideStones: 'none', sideCut: 'round', sideRatio: 0.6, sideHead: 'prong',
   signetShape: 'oval', signetW: 12, signetL: 10, signetT: 1.6, signetFace: 'plain', signetText: 'AR', signetFont: 'cinzel', faceDepth: 0.5,
   engraveText: '', engraveFont: 'gentilis', engraveSize: 1.6, engraveDepth: 0.15, headMetal: 'same',
+  ...SETTING_DEFAULTS,
 };
 
 export function buildRing(P) {
@@ -111,6 +112,7 @@ export function buildRing(P) {
     const culetDepth = -probe.stone.culet;
     const girdleY = outerTop + p.galleryLift + culetDepth;
     head = buildHead({
+      ...headOptions(p),
       cut: p.cut, L: st0.L, W: st0.W, headType: p.headType, prongCount: p.prongCount, prongStyle: p.prongStyle,
       prongDia: p.prongDia, baseY: -(girdleY - outerTop) - 0.05, rails: p.rails, haloStone: p.haloStone, haloGap: p.haloGap, gem: p.gem,
     });

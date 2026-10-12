@@ -39,6 +39,12 @@ CASES = [
     {"type": "ring", "headType": "none", "accentMode": "full-eternity", "accentSize": 2.0},
     {"type": "ring", "cut": "round", "accentCount": 5},
     {"type": "relief", "width": 22, "extra": {"reliefTop": 11, "meshes": [{"layer": "Metal::Body::Relief", "name": "Relief", "v": [0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1], "f": [0, 1, 2, 0, 1, 3, 0, 2, 3, 1, 2, 3]}]}},
+    {"type": "ring", "headType": "collet", "cut": "round", "carat": 0.8, "colletTaper": 1.0},
+    {"type": "ring", "headType": "flush", "cut": "round", "sizeMode": "mm", "stoneL": 3, "stoneW": 3},
+    {"type": "ring", "headType": "double-prong", "cut": "cushion", "carat": 1.2},
+    {"type": "ring", "headType": "half-bezel", "cut": "oval", "carat": 1},
+    {"type": "ring", "headType": "prong", "petals": 8, "petalLayers": 2, "petalTip": "round", "prongRotate": 20, "prongHeight": 1.2, "prongTip": 1.3},
+    {"type": "pendant", "headType": "collet", "petals": 6, "cut": "round"},
     {"type": "name", "text": "Amelia", "extra": {"outlines": [{"outer": [[0, 0], [5, 0], [5, 5], [0, 5]], "holes": [[[1, 1], [2, 1], [2, 2]]], "z0": -0.6, "z1": 0.6}]}},
 ]
 

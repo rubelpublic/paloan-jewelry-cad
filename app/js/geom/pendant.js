@@ -2,7 +2,7 @@
 import * as THREE from 'three';
 import { stoneDimsFromCarat } from '../data.js';
 import { V, resample, offsetPoly, pointInPoly, distToPoly, polyArea, extrudePoly, tube, sphere, spike, torus, lerp, DEG } from './util.js';
-import { buildHead } from './stone.js';
+import { buildHead, SETTING_DEFAULTS, headOptions } from './stone.js';
 
 export const PENDANT_DEFAULTS = {
   shape: 'teardrop', height: 22, width: 15, thickness: 1.6, bevel: 0.35,
@@ -11,6 +11,7 @@ export const PENDANT_DEFAULTS = {
   openwork: 'none', openSize: 1.6, openBridge: 0.9, rim: 1.4,
   backHollow: false, frontWall: 0.7,
   spikes: 0, spikeLen: 2.0, spikeBase: 1.2, coils: 0, milgrain: false, customOutline: null,
+  ...SETTING_DEFAULTS, petalLength: 6, petalWidth: 3,
 };
 
 /** 2D outline [x,y] centred at origin, height H, width W. */
@@ -89,7 +90,7 @@ export function buildPendant(P) {
     const d = p.sizeMode === 'mm' ? { L: p.stoneL, W: p.stoneW } : stoneDimsFromCarat(p.cut, p.carat, p.gem);
     meta.stone = { cut: p.cut, L: d.L, W: d.W, carat: p.carat, gem: p.gem };
     const girdleZ = t / 2 + 0.35;
-    const head = buildHead({ cut: p.cut, L: d.L, W: d.W, headType: p.headType === 'halo' ? 'halo' : p.headType, prongCount: p.prongCount, prongStyle: p.prongStyle, baseY: -(girdleZ - (-t / 2 + 0.25)), rails: 1, gem: p.gem });
+    const head = buildHead({ ...headOptions(p), cut: p.cut, L: d.L, W: d.W, headType: p.headType === 'halo' ? 'halo' : p.headType, prongCount: p.prongCount, prongStyle: p.prongStyle, baseY: -(girdleZ - (-t / 2 + 0.25)), rails: 1, gem: p.gem });
     const place = (g) => { g.rotateX(Math.PI / 2); g.translate(0, p.stoneY, girdleZ); };
     head.parts.forEach((part) => { part.pieces.forEach(place); parts.push(part); });
     place(head.cutter);

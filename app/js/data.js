@@ -108,3 +108,23 @@ export const STYLE_NOTES = {
   minimal:      'Thin band, low profile, no ornament, precise proportions.',
   tribal:       'Bold geometric grooves, hammered or oxidised finish, heavy but hollowed.',
 };
+
+// Calibrated gem library (length × width in mm) — standard trade sizes per cut.
+export const GEM_LIBRARY = {
+  round: [1, 1.3, 1.5, 1.8, 2, 2.5, 3, 3.5, 4, 4.5, 5, 5.5, 6, 6.5, 7, 7.5, 8, 9, 10, 11, 12].map((d) => [d, d]),
+  oval: [[5, 3], [6, 4], [7, 5], [8, 6], [9, 7], [10, 8], [11, 9], [12, 10], [14, 10], [16, 12]],
+  cushion: [3, 4, 5, 6, 7, 8, 9, 10].map((d) => [d, d]).concat([[7, 5], [8, 6], [9, 7], [10, 8]]),
+  princess: [2, 2.5, 3, 3.5, 4, 4.5, 5, 5.5, 6, 6.5, 7, 8].map((d) => [d, d]),
+  emerald: [[5, 3], [6, 4], [7, 5], [8, 6], [9, 7], [10, 8], [12, 10], [14, 10]],
+  asscher: [4, 5, 6, 7, 8, 9].map((d) => [d, d]),
+  radiant: [[6, 4], [7, 5], [8, 6], [9, 7], [10, 8]],
+  pear: [[5, 3], [6, 4], [7, 5], [8, 5], [9, 6], [10, 7], [12, 8], [14, 10]],
+  marquise: [[4, 2], [6, 3], [8, 4], [10, 5], [12, 6], [14, 7]],
+  heart: [4, 5, 6, 7, 8, 9, 10].map((d) => [d, d]),
+  trillion: [4, 5, 6, 7, 8, 9, 10].map((d) => [d, d]),
+};
+export function gemLibraryOptions(cut, gem = 'diamond') {
+  const out = { '': '— custom (carat / mm sliders) —' };
+  for (const [L, W] of GEM_LIBRARY[cut] || GEM_LIBRARY.round) out[`${L}x${W}`] = `${L === W ? L : `${L} × ${W}`} mm · ${caratFromDims(cut, L, W, gem).toFixed(2)} ct`;
+  return out;
+}

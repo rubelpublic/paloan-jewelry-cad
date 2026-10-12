@@ -111,6 +111,27 @@ export function validate(model, m, params, metalKey) {
   if (meta.coilWire) add(meta.coilWire < 0.6 ? 'warn' : 'pass', 'Coil wire', `Coil wire Ø ≈ ${f(meta.coilWire)} mm${meta.coilWire < 0.6 ? ' — fragile at the thin end' : ''}.`, meta.coilWire < 0.6 ? 'Keep curling wire ≥ 0.6 mm or fuse the coil to the base.' : '');
   if (meta.twistWire) add(meta.twistWire < 1.0 ? 'warn' : 'pass', 'Twisted strands', `Strand Ø ${f(meta.twistWire)} mm.`, meta.twistWire < 1.0 ? 'Strands under 1 mm fuse poorly; widen the band.' : '');
 
+  // ---- settings v1.2 ----
+  if (meta.headType === 'collet') {
+    if (meta.colletWall < RULES.bezelWallMin) add('fail', 'Collet wall too thin', `${f(meta.colletWall)} mm.`, 'Use ≥ 0.6 mm.');
+    else add('pass', 'Collet', `${f(meta.colletHeight)} mm high, ${f(meta.colletWall)} mm wall, ${f(meta.colletTaper)} mm taper.`);
+  }
+  if (meta.headType === 'flush') {
+    if (meta.flushMargin < 0.8) add('warn', 'Thin metal around flush stone', `${f(meta.flushMargin)} mm.`, 'Flush setting needs ≥ 0.8–1.0 mm of metal to hammer over the girdle.');
+    else add('pass', 'Flush setting', `${f(meta.flushMargin)} mm of metal around the girdle.`);
+    if (meta.stone && Math.min(meta.stone.L, meta.stone.W) > 6.5) add('warn', 'Large stone in flush setting', 'Flush/gypsy suits stones ≤ 6 mm.', 'Use a bezel or collet for bigger stones.');
+  }
+  if (meta.headType === 'double-prong') add('info', 'Double prongs', `${meta.prongCount} claws in pairs — more secure, slightly more metal over the stone.`);
+  if (meta.headType === 'half-bezel') add('info', 'Half bezel', 'Open ends show the stone profile; keep wall ≥ 0.6 mm on the sides that hold the stone.');
+  if (meta.petals) {
+    const pt = meta.petals;
+    if (pt.minThick < 0.5) add('fail', 'Petal edges too thin', `${f(pt.minThick)} mm at the tips.`, 'Petal thickness ≥ 0.8 mm (tips taper to ~0.5 mm).');
+    else if (pt.minThick < 0.6) add('warn', 'Delicate petal tips', `${f(pt.minThick)} mm.`, 'Thicken petals to 0.9–1.0 mm for daily wear.');
+    else add('pass', 'Petals', `${pt.count} petals in ${pt.layers} layer(s), ${f(pt.length)} × ${f(pt.width)} mm.`);
+    if (pt.enamel && pt.enamel !== 'none') add('info', 'Enamel', `${pt.enamel} enamel on the petals: leave a 0.2–0.3 mm recess (champlevé) and fire after casting/polishing.`);
+  }
+  if (meta.manualEdits) add('info', 'Manual edits', `${meta.manualEdits} part(s) moved/arrayed/mirrored in Edit mode — re-check clearances visually; checks use parameter values.`);
+
   // ---- signet / text / relief / two-tone ----
   if (meta.signet) {
     const s = meta.signet;

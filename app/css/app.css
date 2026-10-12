@@ -74,7 +74,7 @@ label.chk { display: flex; gap: 8px; align-items: center; color: var(--text); }
 .vp-tools button.on { border-color: var(--gold); color: var(--gold2); }
 .vp-tools .sep { width: 1px; height: 20px; background: var(--line); margin: 0 3px; }
 .vp-tools input[type=range] { width: 70px; accent-color: var(--gold); }
-.hud { position: absolute; left: 12px; bottom: 12px; font: 12px/1.5 ui-monospace, Menlo, Consolas, monospace; color: #cfd2d8; background: rgba(15,16,19,.7); border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; pointer-events: none; }
+.hud { position: absolute; left: 12px; bottom: 64px; font: 12px/1.5 ui-monospace, Menlo, Consolas, monospace; color: #cfd2d8; background: rgba(15,16,19,.7); border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; pointer-events: none; }
 .busy { position: absolute; right: 12px; top: 12px; padding: 6px 12px; border-radius: 20px; background: rgba(217,180,90,.15); color: var(--gold2); border: 1px solid rgba(217,180,90,.4); font-size: 12px; opacity: 0; transition: opacity .2s; pointer-events: none; }
 .busy.on { opacity: 1; }
 
@@ -126,6 +126,19 @@ label.chk { display: flex; gap: 8px; align-items: center; color: var(--text); }
 .toast.on { opacity: 1; transform: translate(-50%, 0); }
 dialog { background: var(--bg2); color: var(--text); border: 1px solid var(--line); border-radius: 14px; width: min(460px, 92vw); padding: 18px; }
 dialog::backdrop { background: rgba(0,0,0,.6); }
+
+/* edit mode + AI bar */
+.edit-panel { position: absolute; right: 12px; top: 56px; width: 220px; background: rgba(20,22,27,.94); border: 1px solid var(--gold); border-radius: 12px; padding: 10px; font-size: 12.5px; z-index: 3; }
+.edit-panel b { display: block; color: var(--gold2); margin-bottom: 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.edit-panel .seg { display: flex; gap: 4px; margin-bottom: 6px; }
+.edit-panel .seg button { flex: 1; padding: 5px; font-size: 12px; }
+.edit-panel input[type=number] { margin-top: 2px; }
+.edit-panel .btnrow { margin: 6px 0 0; }
+.edit-panel .btnrow button { font-size: 12px; padding: 6px; }
+.ai-bar { position: absolute; left: 50%; transform: translateX(-50%); bottom: 14px; width: min(640px, calc(100% - 300px)); display: flex; gap: 6px; align-items: center; background: rgba(20,22,27,.92); border: 1px solid #3a3424; border-radius: 30px; padding: 5px 5px 5px 14px; z-index: 2; backdrop-filter: blur(6px); }
+.ai-bar input { flex: 1; background: none; border: 0; margin: 0; padding: 6px 2px; outline: none; color: var(--text); }
+.ai-bar button { border-radius: 24px; padding: 7px 14px; }
+@media (max-width: 760px) { .ai-bar { width: calc(100% - 24px); bottom: 10px; } .hud { bottom: 64px; } .edit-panel { top: auto; bottom: 64px; right: 8px; } }
 
 /* image → 3D */
 .img3d-preview { position: relative; margin: 8px 0; border: 1px solid var(--line); border-radius: var(--r); overflow: hidden; background: repeating-conic-gradient(#1d2026 0% 25%, #23262d 0% 50%) 50% / 16px 16px; }

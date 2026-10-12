@@ -35,6 +35,23 @@
 - **Finish:** polished, satin, matte, brushed or oxidised (shown in the viewer and noted in the report).
 - **Undo/redo** (↶ ↷, Ctrl+Z / Ctrl+Y), **turntable** (⟳), and **✦ 6 design variations**.
 
+## 1d. Settings, gem library, petals, edit mode, AI bar (v1.2)
+- **Gem library:** under Center stone, pick a calibrated size (e.g. 9 × 7 mm · 1.7 ct). The size sliders switch to millimetres automatically.
+- **Setting types:** Prong / claw, Double prongs, Bezel, Half bezel, Collet (tapered cone, like the JFR "One-layer Collet"), Flush / gypsy, Halo.
+- **Setting details:**
+  - Prongs: tip height, bead size, basket taper and rotation.
+  - Collet: height, taper, wall, top and bottom chamfers.
+  - Flush: metal margin around the stone.
+- **Flower petals:** petals per layer, layers, length, width, lift, curl, thickness, vein, tip shape and enamel colour. Template *Flower ring · lotus petals*.
+- **✥ Edit mode:**
+  - Click a part to select it, then drag the gumball: **W** move, **E** rotate, **R** scale (scale works as taper).
+  - *Polar array* repeats the part around the stone axis, *Mirror* adds a mirrored copy, *Delete* removes the part, and *Reset* undoes your edits to it.
+  - Edits are stored in the design (undo, save, share, Rhino workflow notes).
+- **✨ AI edit bar** (bottom of the viewport):
+  - Plain-language edits such as "bigger stone", "2 ct", "6 prongs", "collet setting", "add flower with 10 petals", "longer petals", "green enamel", "rose gold", "thicker band", "taller head", "add spikes", "engrave 'Forever'", "8 g".
+  - Start with "new …" to begin a new design.
+  - Anything the offline parser doesn't understand goes to Claude (with an API key) and only the changed parameters are applied.
+
 ## 2. Right panel
 - **Weight card**: finished weight in the chosen alloy (pairs for earrings), metal volume (exact union of all parts), cast weight (+4 %), resin/wax model weight, surface area, total carats, bounding box, metal cost (set price on the Report tab).
 - **Manufacturability**: every check with pass / warn / fail, the measured value and the fix. Score = 100 − 20 per fail − 6 per warn.

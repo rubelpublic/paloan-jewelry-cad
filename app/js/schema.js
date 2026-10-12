@@ -1,5 +1,5 @@
 // UI parameter schemas per jewelry type. Fields render into the Design panel.
-import { METALS, GEMS, CUTS, STYLE_NOTES } from './data.js';
+import { METALS, GEMS, CUTS, STYLE_NOTES, gemLibraryOptions } from './data.js';
 import { PROFILES } from './geom/util.js';
 import { RING_DEFAULTS } from './geom/ring.js';
 import { PENDANT_DEFAULTS } from './geom/pendant.js';
@@ -24,8 +24,9 @@ const COMMON = [
 const TWO_TONE = { g: 'Material', k: 'headMetal', label: 'Head / setting metal (two-tone)', t: 'select', opts: { same: 'Same as body', ...metalOpts } };
 const FONT_OPTS = () => fontOptions();
 const STONE = (show = () => true) => [
-  { g: 'Center stone', k: 'headType', label: 'Setting', t: 'select', opts: { none: 'No stone', prong: 'Prong', bezel: 'Bezel', halo: 'Halo + prongs' } },
-  { g: 'Center stone', k: 'cut', label: 'Cut', t: 'select', opts: cutOpts, show: and(show, not('headType', 'none')) },
+  { g: 'Center stone', k: 'headType', label: 'Setting', t: 'select', opts: { none: 'No stone', prong: 'Prong / claw', 'double-prong': 'Double prongs', bezel: 'Bezel', 'half-bezel': 'Half bezel', collet: 'Collet (tapered cone)', flush: 'Flush / gypsy', halo: 'Halo + prongs' } },
+  { g: 'Center stone', k: 'cut', label: 'Cut', t: 'select', opts: cutOpts, show: and(show, not('headType', 'none')), rerender: true },
+  { g: 'Center stone', k: 'gemSize', label: 'Gem library (calibrated size)', t: 'select', opts: (p) => gemLibraryOptions(p.cut, p.gem), show: and(show, not('headType', 'none')) },
   { g: 'Center stone', k: 'gem', label: 'Gem', t: 'select', opts: gemOpts, show: and(show, not('headType', 'none')) },
   { g: 'Center stone', k: 'sizeMode', label: 'Size by', t: 'select', opts: { carat: 'Carat weight', mm: 'Millimetres' }, show: and(show, not('headType', 'none')) },
   { g: 'Center stone', k: 'carat', label: 'Carat', t: 'range', min: 0.05, max: 6, step: 0.01, unit: 'ct', show: and(show, not('headType', 'none'), has('sizeMode', 'carat')) },
@@ -33,10 +34,30 @@ const STONE = (show = () => true) => [
   { g: 'Center stone', k: 'stoneW', label: 'Width', t: 'range', min: 1, max: 16, step: 0.05, unit: 'mm', show: and(show, not('headType', 'none'), has('sizeMode', 'mm')) },
   { g: 'Center stone', k: 'prongCount', label: 'Prongs', t: 'range', min: 2, max: 8, step: 1, show: and(show, has('headType', 'prong', 'halo')) },
   { g: 'Center stone', k: 'prongStyle', label: 'Prong tip', t: 'select', opts: { round: 'Round bead', claw: 'Claw / eagle', pointed: 'Pointed (gothic)' }, show: and(show, has('headType', 'prong', 'halo')) },
-  { g: 'Center stone', k: 'prongDia', label: 'Prong Ø (0 = auto)', t: 'range', min: 0, max: 1.6, step: 0.05, unit: 'mm', show: and(show, has('headType', 'prong', 'halo')) },
+  { g: 'Center stone', k: 'prongDia', label: 'Prong Ø (0 = auto)', t: 'range', min: 0, max: 1.6, step: 0.05, unit: 'mm', show: and(show, has('headType', 'prong', 'halo', 'double-prong')) },
   { g: 'Center stone', k: 'haloStone', label: 'Halo melee', t: 'range', min: 0.8, max: 2.5, step: 0.05, unit: 'mm', show: and(show, has('headType', 'halo')) },
   { g: 'Center stone', k: 'haloGap', label: 'Halo gap', t: 'range', min: 0, max: 0.5, step: 0.01, unit: 'mm', show: and(show, has('headType', 'halo')) },
   { g: 'Center stone', k: 'seatCut', label: 'Cut stone seats (boolean)', t: 'check', show: not('headType', 'none') },
+  { g: 'Setting details', k: 'prongHeight', label: 'Prong tip height (× standard)', t: 'range', min: 0.6, max: 1.8, step: 0.05, show: and(show, has('headType', 'prong', 'halo', 'double-prong')) },
+  { g: 'Setting details', k: 'prongTip', label: 'Bead / tip size (× prong)', t: 'range', min: 0.7, max: 1.6, step: 0.05, show: and(show, has('headType', 'prong', 'halo', 'double-prong')) },
+  { g: 'Setting details', k: 'basketTaper', label: 'Basket taper (prong base ÷ girdle)', t: 'range', min: 0.35, max: 1, step: 0.01, show: and(show, has('headType', 'prong', 'halo', 'double-prong')) },
+  { g: 'Setting details', k: 'prongRotate', label: 'Rotate prongs / petals', t: 'range', min: 0, max: 90, step: 1, unit: '°', show: and(show, not('headType', 'none')) },
+  { g: 'Setting details', k: 'bezelWall', label: 'Wall thickness', t: 'range', min: 0.4, max: 2, step: 0.05, unit: 'mm', show: and(show, has('headType', 'bezel', 'half-bezel', 'collet')) },
+  { g: 'Setting details', k: 'colletHeight', label: 'Collet height (0 = to shank)', t: 'range', min: 0, max: 8, step: 0.05, unit: 'mm', show: and(show, has('headType', 'collet')) },
+  { g: 'Setting details', k: 'colletTaper', label: 'Collet taper', t: 'range', min: 0, max: 3, step: 0.05, unit: 'mm', show: and(show, has('headType', 'collet')) },
+  { g: 'Setting details', k: 'chamferA', label: 'Chamfer top', t: 'range', min: 0, max: 0.6, step: 0.01, unit: 'mm', show: and(show, has('headType', 'collet')) },
+  { g: 'Setting details', k: 'chamferB', label: 'Chamfer bottom', t: 'range', min: 0, max: 0.6, step: 0.01, unit: 'mm', show: and(show, has('headType', 'collet')) },
+  { g: 'Setting details', k: 'flushMargin', label: 'Metal around stone', t: 'range', min: 0.6, max: 4, step: 0.05, unit: 'mm', show: and(show, has('headType', 'flush')) },
+  { g: 'Flower petals', k: 'petals', label: 'Petals per layer (0 = off)', t: 'range', min: 0, max: 16, step: 1, show: and(show, not('headType', 'none')) },
+  { g: 'Flower petals', k: 'petalLayers', label: 'Layers', t: 'range', min: 1, max: 3, step: 1, show: (p) => p.petals > 0 },
+  { g: 'Flower petals', k: 'petalLength', label: 'Petal length', t: 'range', min: 2, max: 16, step: 0.1, unit: 'mm', show: (p) => p.petals > 0 },
+  { g: 'Flower petals', k: 'petalWidth', label: 'Petal width', t: 'range', min: 1, max: 8, step: 0.05, unit: 'mm', show: (p) => p.petals > 0 },
+  { g: 'Flower petals', k: 'petalLift', label: 'Lift (cup angle)', t: 'range', min: -20, max: 70, step: 1, unit: '°', show: (p) => p.petals > 0 },
+  { g: 'Flower petals', k: 'petalCurl', label: 'Tip curl', t: 'range', min: -1, max: 2, step: 0.05, show: (p) => p.petals > 0 },
+  { g: 'Flower petals', k: 'petalThick', label: 'Thickness', t: 'range', min: 0.4, max: 2, step: 0.05, unit: 'mm', show: (p) => p.petals > 0 },
+  { g: 'Flower petals', k: 'petalRidge', label: 'Centre vein depth', t: 'range', min: 0, max: 0.6, step: 0.01, unit: 'mm', show: (p) => p.petals > 0 },
+  { g: 'Flower petals', k: 'petalTip', label: 'Tip shape', t: 'select', opts: { pointed: 'Pointed leaf', round: 'Round petal', heart: 'Heart notch' }, show: (p) => p.petals > 0 },
+  { g: 'Flower petals', k: 'petalEnamel', label: 'Enamel colour', t: 'select', opts: { none: 'None (metal)', green: 'Green enamel', pink: 'Pink enamel', blue: 'Blue enamel', white: 'White enamel', black: 'Black enamel', red: 'Red enamel' }, show: (p) => p.petals > 0 },
 ];
 
 export const SCHEMAS = {

@@ -8,6 +8,7 @@ import { buildEarring, buildBangle, buildChain } from './geom/others.js';
 import { buildRelief } from './geom/relief.js';
 import { buildName } from './geom/text.js';
 import { ensureFont, getFont } from './fonts.js';
+import { applyEdits } from './editor.js';
 import { merge, signedVolume, surfaceArea } from './geom/util.js';
 import { METALS, GEMS } from './data.js';
 
@@ -59,6 +60,7 @@ export function generate(type, params, { csg = true } = {}) {
   model.type = type;
   model.booleans = [];
   if (params.headMetal && params.headMetal !== 'same') for (const part of model.parts) if (part.kind === 'metal' && part.layer.startsWith('Head')) part.metal = params.headMetal;
+  applyEdits(model, params.edits, type);
   const asGeo = (c) => (Array.isArray(c.geometry) ? merge(c.geometry, 0.1) : c.geometry);
   if (csg && params.seatCut !== false) {
     for (const cut of model.cutters.filter((c) => c.type === 'seat')) {

@@ -165,6 +165,9 @@ export function buildHead(o) {
     cut = 'round', L, W, headType = 'prong', prongCount = 4, prongStyle = 'round', prongDia = 0,
     baseY = -4, rails = 1, haloStone = 1.3, haloGap = 0.15, seatOverlap = 0.18, bezelWall = 0.7,
     gem = 'diamond', basketTaper = 0.62, metalOnly = false,
+    prongHeight = 1, prongTip = 1, prongRotate = 0,
+    colletHeight = 0, colletTaper = 0.6, chamferA = 0.15, chamferB = 0.1, flushMargin = 1.0,
+    petals = 0, petalLayers = 2, petalLength = 7, petalWidth = 3.2, petalLift = 18, petalCurl = 0.6, petalThick = 0.8, petalRidge = 0.25, petalTip = 'pointed', petalEnamel = 'none',
   } = o;
   const st = stoneGeometry(cut, L, W);
   const minD = Math.min(L, W);
@@ -177,11 +180,18 @@ export function buildHead(o) {
   const girdleOutline = st.outline;
   const grow = (p, d) => { const r = Math.hypot(p[0], p[1]) || 1; return [p[0] * (r + d) / r, p[1] * (r + d) / r]; };
 
-  if (headType === 'prong' || headType === 'halo') {
-    const angs = prongAngles(cut, prongCount);
+  if (headType === 'prong' || headType === 'halo' || headType === 'double-prong') {
+    const rot = (prongRotate * Math.PI) / 180;
+    let angs = prongAngles(cut, prongCount).map((a) => a + (CUTS[cut]?.corners || CUTS[cut]?.points ? 0 : rot));
+    if (headType === 'double-prong') {
+      const rAvg = (L + W) / 4;
+      const d = (pr * 1.35) / rAvg;
+      angs = angs.flatMap((a) => [a - d, a + d]);
+    }
     meta.prongCount = angs.length;
     const prongGeos = [], tipGeos = [];
-    const topY = st.top * (prongStyle === 'claw' ? 0.75 : 0.62);
+    const topY = st.top * (prongStyle === 'claw' ? 0.75 : 0.62) * prongHeight;
+    meta.prongTopY = topY;
     for (const ang of angs) {
       const rp = rimPoint(girdleOutline, ang);
       const atRim = grow(rp, pr - seatOverlap);                     // prong centre so it overlaps the girdle by seatOverlap
@@ -201,7 +211,7 @@ export function buildHead(o) {
         const inward = V(-atRim[0], 0, -atRim[1]).normalize();
         tipGeos.push(tube([tipC.clone().addScaledVector(inward, -pr * 0.2), tipC.clone().addScaledVector(inward, pr * 0.9).add(V(0, -pr * 0.15, 0))], (u) => pr * (1 - 0.35 * u), { segments: 8, radial: 12 }));
       } else {
-        tipGeos.push(sphere(tipC.clone().add(V(0, pr * 0.15, 0)), pr * 1.08));
+        tipGeos.push(sphere(tipC.clone().add(V(0, pr * 0.15, 0)), pr * 1.08 * prongTip));
       }
     }
     parts.push({ name: 'Prongs', layer: 'Head::Prongs', kind: 'metal', pieces: [...prongGeos, ...tipGeos], seatCut: true });
@@ -220,6 +230,66 @@ export function buildHead(o) {
     }
     if (railGeos.length) parts.push({ name: 'Gallery rails', layer: 'Head::Gallery', kind: 'metal', pieces: railGeos, seatCut: true });
     meta.rails = railGeos.length;
+  }
+
+  if (headType === 'collet' || headType === 'flush' || headType === 'half-bezel') {
+    const ol = resampleObj(girdleOutline, 72);
+    const lip = Math.min(0.35, minD * 0.06);
+    const wall = Math.max(0.5, bezelWall);
+    const cA = Math.max(0, chamferA), cB = Math.max(0, chamferB);
+    let prof;
+    if (headType === 'collet') {
+      // one-layer collet (JFR style): tapered cone, top/bottom chamfers, height from the girdle down
+      const yTop = st.girdle / 2 + st.crown * 0.3;
+      const h = colletHeight > 0 ? colletHeight : Math.min(-baseY + yTop, st.depth * 1.15);
+      const yBot = yTop - h;
+      const T = Math.min(colletTaper, Math.min(L, W) * 0.3);
+      prof = [[-lip, yTop], [wall - cA, yTop], [wall, yTop - cA], [wall - T, yBot + cB], [wall - T - cB, yBot], [-lip - T * 0.85, yBot]];
+      meta.colletHeight = h; meta.colletTaper = T; meta.colletWall = wall; meta.bezelLip = lip;
+    } else if (headType === 'flush') {
+      // gypsy / flush: a solid metal button around the stone; the seat cutter opens it so the table sits just proud
+      const m = Math.max(0.6, flushMargin);
+      const yTop = st.girdle / 2 + st.crown * 0.82, yBot = Math.min(baseY - 0.3, st.culet - 0.6);
+      const outl = offsetPoly(girdleOutline, m);
+      const shape = new THREE.Shape(outl.map(([x, z]) => new THREE.Vector2(x, z)));
+      const bev = 0.3;
+      const g = new THREE.ExtrudeGeometry(shape, { depth: yTop - yBot - 2 * bev, bevelEnabled: true, bevelThickness: bev, bevelSize: bev, bevelOffset: -bev, bevelSegments: 3, curveSegments: 4 });
+      g.translate(0, 0, bev);
+      g.rotateX(Math.PI / 2);                                // shape (x, z) kept, extrusion goes down −Y
+      g.translate(0, yTop, 0);
+      parts.push({ name: 'Flush setting', layer: 'Head::Bezel', kind: 'metal', pieces: [g], seatCut: true });
+      meta.flushMargin = m; meta.bezelLip = lip; meta.bezelWall = m; meta.prongCount = 0;
+      prof = null;
+    } else {
+      const y0 = Math.max(baseY, -st.pavilion * 0.85), y1 = st.girdle / 2 + st.crown * 0.35;
+      prof = [[-lip, y0], [wall, y0], [wall, y1 - 0.05], [wall - 0.15, y1], [-lip, y1]];
+      meta.bezelLip = lip;
+    }
+    if (!prof) { /* flush handled above */ } else if (headType === 'half-bezel') {
+      // two walls on the sides (across the finger), open at both ends
+      const pieces = [];
+      for (const side of [1, -1]) {
+        const arc = ol.filter(([x, z]) => side * x > 0 && Math.abs(Math.atan2(z, Math.abs(x))) < 0.95);
+        arc.sort((a, b) => Math.atan2(a[1], a[0] * side) - Math.atan2(b[1], b[0] * side));
+        if (arc.length < 3) continue;
+        const fr = polylineFrame(arc.map(([x, z]) => V(x, 0, z)), false);
+        const c0 = V(0, 0, 0);
+        pieces.push(sweep({ stations: arc.length * 2, closed: false, frame: (u) => { const f = fr(u); const n = f.p.clone().sub(c0).setY(0).normalize(); return { p: f.p, n, b: V(0, 1, 0) }; }, profile: () => prof }));
+      }
+      parts.push({ name: 'Half bezel', layer: 'Head::Bezel', kind: 'metal', pieces, seatCut: true });
+    } else {
+      const fr = polylineFrame(ol.map(([x, z]) => V(x, 0, z)), true);
+      const g = sweep({ frame: (u) => { const f = fr(u); return { p: f.p, n: f.n, b: V(0, 1, 0) }; }, profile: () => prof, stations: 144, closed: true });
+      parts.push({ name: headType === 'collet' ? 'Collet' : 'Flush setting', layer: 'Head::Bezel', kind: 'metal', pieces: [g], seatCut: true });
+    }
+    // pedestal down to the body for tall heads
+    const lowest = prof ? Math.min(...prof.map((q) => q[1])) : baseY;
+    if (prof && baseY < lowest - 0.2) {
+      const ped = ol.map(([x, z]) => { const r = Math.hypot(x, z) || 1, sc = ((r + wall * 0.5) / r) * 0.62; return V(x * sc, 0, z * sc); });
+      const fr2 = polylineFrame(ped, true);
+      parts.push({ name: 'Head pedestal', layer: 'Head::Bezel', kind: 'metal', seatCut: true, pieces: [sweep({ frame: (u) => { const f = fr2(u); return { p: f.p, n: f.n, b: V(0, 1, 0) }; }, profile: () => [[-0.5, baseY - 0.3], [0.5, baseY - 0.3], [0.5, lowest + 0.25], [-0.5, lowest + 0.25]], stations: 96 })] });
+    }
+    if (prof) { meta.bezelWall = wall; meta.prongCount = 0; }
   }
 
   if (headType === 'bezel') {
@@ -267,6 +337,12 @@ export function buildHead(o) {
     meta.haloCount = count; meta.haloGap = haloGap; meta.haloStone = haloStone; meta.beadDia = beadR * 2;
     meta.haloOuter = off + w;
   }
+  if (petals > 0) {
+    const pc = petalCrown({ count: petals, layers: petalLayers, length: petalLength, width: petalWidth, lift: petalLift, curl: petalCurl, thick: petalThick, ridge: petalRidge, tip: petalTip,
+      r0: Math.min(L, W) * 0.18, y0: baseY + 0.45, rotate: prongRotate });
+    parts.push({ name: `Petals (${pc.count})`, layer: 'Head::Petals', kind: 'metal', pieces: pc.pieces, enamel: petalEnamel !== 'none' ? petalEnamel : undefined });
+    meta.petals = { count: pc.count, layers: petalLayers, length: petalLength, width: petalWidth, thick: petalThick, minThick: pc.minThick, enamel: petalEnamel };
+  }
   meta.headRadius = Math.max(L, W) / 2 + (headType === 'halo' ? meta.haloOuter : pd);
   return { parts, meta, stone: st, cutter: stoneCutter(st, cut, L, W) };
 }
@@ -285,3 +361,74 @@ export function stoneCutter(st, cut, L, W) {
 }
 
 export { prongAngles, rimPoint };
+
+/** Setting / head options shared by every jewelry type (prong details, collet, flush, petals, gem library). */
+export const SETTING_DEFAULTS = {
+  gemSize: '', prongHeight: 1, prongTip: 1, prongRotate: 0, basketTaper: 0.62,
+  colletHeight: 0, colletTaper: 0.6, chamferA: 0.15, chamferB: 0.1, bezelWall: 0.7, flushMargin: 1.0,
+  petals: 0, petalLayers: 2, petalLength: 7, petalWidth: 3.2, petalLift: 6, petalCurl: -0.5, petalThick: 0.9, petalRidge: 0.25, petalTip: 'pointed', petalEnamel: 'none',
+};
+export function headOptions(p) {
+  const o = {};
+  for (const k of Object.keys(SETTING_DEFAULTS)) if (p[k] !== undefined) o[k] = p[k];
+  delete o.gemSize;
+  return o;
+}
+
+
+/**
+ * Petal crown (JFR "dual rail sweep + polar array"): leaf-shaped petals radiating under the stone.
+ * Local head frame: petals start at radius r0, height y0 and grow outward, lifted by `lift` degrees and curling up at the tip.
+ */
+export function petalCrown({ count = 8, layers = 2, length = 7, width = 3.2, lift = 18, curl = 0.6, thick = 0.8, ridge = 0.25, tip = 'pointed', r0 = 1, y0 = -2, rotate = 0 }) {
+  const pieces = [];
+  let total = 0;
+  const minThick = thick * 0.7;
+  for (let layer = 0; layer < layers; layer++) {
+    const n = Math.round(count * (layer === 0 ? 1 : 1 + 0.5 * layer));
+    const Lk = length * (1 - 0.18 * layer), Wk = width * (1 - 0.12 * layer);
+    const liftK = ((lift + layer * 24) * Math.PI) / 180;
+    const curlK = curl + layer * 0.7;
+    const off = (layer % 2 ? 0.5 : 0) + (rotate / 360) * n;
+    for (let i = 0; i < n; i++) {
+      const phi = ((i + off) / n) * 2 * Math.PI;
+      const dir = V(Math.sin(phi), 0, Math.cos(phi)), up = V(0, 1, 0);
+      const side = V(Math.cos(phi), 0, -Math.sin(phi));
+      // midline in the (dir, up) plane
+      const mid = (u) => {
+        const along = u * Lk;
+        const h = Math.sin(liftK) * along + curlK * Lk * 0.25 * u * u * u;
+        const out = Math.cos(liftK) * along;
+        return V(0, y0 + layer * 0.6 + h, 0).addScaledVector(dir, r0 + out);
+      };
+      const widthAt = (u) => {
+        const s = Math.sin(Math.PI * Math.min(1, Math.max(0, u)) ** 0.85);
+        const w = tip === 'round' ? Math.sqrt(s) : tip === 'heart' ? s * (1 - 0.35 * Math.exp(-(((u - 0.98) / 0.06) ** 2))) : s;
+        return Math.max(0.12, (Wk / 2) * w);
+      };
+      const thickAt = (u) => Math.max(minThick, thick * (1 - 0.3 * u));
+      const g = sweep({
+        stations: 28, closed: false,
+        frame: (u) => {
+          const p = mid(u), q = mid(Math.min(1, u + 0.02)), q0 = mid(Math.max(0, u - 0.02));
+          const t = q.clone().sub(q0).normalize();
+          const n = side.clone().cross(t).normalize();                 // petal "up" normal
+          if (n.dot(up) < 0) n.negate();
+          return { p, n, b: side };
+        },
+        profile: (u) => {
+          const w = widthAt(u), t = thickAt(u), pts = [];
+          for (let j = 0; j < 18; j++) {
+            const a = (j / 18) * 2 * Math.PI, c = Math.cos(a), s = Math.sin(a);
+            let h = (t / 2) * s + (w * 0.18) * c * c;                        // cupped petal
+            if (s > 0) h -= ridge * Math.exp(-((c / 0.2) ** 2)) * Math.min(1, u * 4);   // centre vein
+            pts.push([h, w * c]);
+          }
+          return pts;
+        },
+      });
+      pieces.push(g); total++;
+    }
+  }
+  return { pieces, count: total, minThick };
+}

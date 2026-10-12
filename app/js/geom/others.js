@@ -2,7 +2,7 @@
 import * as THREE from 'three';
 import { stoneDimsFromCarat } from '../data.js';
 import { V, sweep, ellipseFrame, superProfile, PROFILES, worley, vnoise, smooth, lerp, DEG, tube, sphere, spike, torus } from './util.js';
-import { buildHead } from './stone.js';
+import { buildHead, SETTING_DEFAULTS, headOptions } from './stone.js';
 import { buildPendant } from './pendant.js';
 
 /* ======================= EARRINGS ======================= */
@@ -12,6 +12,7 @@ export const EARRING_DEFAULTS = {
   postDia: 0.8, postLen: 10,
   hoopDia: 18, hoopWidth: 2.5, hoopThick: 1.6, profile: 'dome', texture: 'none', textureDepth: 0.1, hingeClearance: 0.1,
   dropShape: 'teardrop', dropHeight: 14, dropWidth: 9, dropThick: 1.3, spikes: 0, spikeLen: 1.6, spikeBase: 1.0,
+  ...SETTING_DEFAULTS, petalLength: 4.5, petalWidth: 2.4,
 };
 
 export function buildEarring(P) {
@@ -23,7 +24,7 @@ export function buildEarring(P) {
     meta.stone = { cut: p.cut, L: d.L, W: d.W, carat: p.carat, gem: p.gem };
     const probe = buildHead({ cut: p.cut, L: d.L, W: d.W, headType: 'bezel', metalOnly: true });
     const baseY = probe.stone.culet - 1.0;
-    const head = buildHead({ cut: p.cut, L: d.L, W: d.W, headType: p.headType, prongCount: p.prongCount, prongStyle: p.prongStyle, baseY, rails: 2, haloStone: p.haloStone, haloGap: p.haloGap, gem: p.gem });
+    const head = buildHead({ ...headOptions(p), cut: p.cut, L: d.L, W: d.W, headType: p.headType, prongCount: p.prongCount, prongStyle: p.prongStyle, baseY, rails: 2, haloStone: p.haloStone, haloGap: p.haloGap, gem: p.gem });
     const place = (g) => g.rotateX(Math.PI / 2);                      // table faces +Z (viewer)
     head.parts.forEach((part) => { part.pieces.forEach(place); parts.push(part); });
     place(head.cutter); cutters.push({ type: 'seat', geometry: head.cutter });

@@ -14,6 +14,8 @@ import { imageStore, exportField, importField } from './image3d.js';
 import { registerFontFile } from './fonts.js';
 import { initImageTab } from './imagetab.js';
 import { initVariations } from './variations.js';
+import { initEditor } from './editor.js';
+import { parseEdit } from './aiedit.js';
 import { validate } from './validate.js';
 import { optimizeWeight } from './optimize.js';
 import { merge, resample } from './geom/util.js';
@@ -62,6 +64,12 @@ function metalMat(k, finish = 'polished') {
     metalMats[key] = new THREE.MeshPhysicalMaterial({ color: col, metalness: 1, roughness: Math.min(0.9, m.rough + fz.r), clearcoat: fz.cc, clearcoatRoughness: 0.2, anisotropy: fz.aniso || 0, side: THREE.DoubleSide });
   }
   return metalMats[key];
+}
+const ENAMEL = { green: 0x2f9e5a, pink: 0xe58fb0, blue: 0x2f5fc4, white: 0xf3f1ea, black: 0x15151a, red: 0xb52235 };
+const enamelMats = {};
+function enamelMat(k) {
+  if (!enamelMats[k]) enamelMats[k] = new THREE.MeshPhysicalMaterial({ color: ENAMEL[k] || 0x2f9e5a, metalness: 0.05, roughness: 0.18, clearcoat: 1, clearcoatRoughness: 0.05, side: THREE.DoubleSide });
+  return enamelMats[k];
 }
 function stoneMat(k) {
   if (!stoneMats[k]) { const g = GEMS[k] || GEMS.diamond; stoneMats[k] = new THREE.MeshPhysicalMaterial({ color: g.color, metalness: 0, roughness: 0, transmission: k === 'onyx' ? 0 : 0.92, thickness: 2, ior: Math.min(g.ior, 2.333), specularIntensity: 1, envMapIntensity: 2.2, flatShading: true }); }
@@ -148,7 +156,7 @@ function fieldEl(fd) {
     let tt = 0;
     inp.oninput = () => { clearTimeout(tt); tt = setTimeout(() => onParam(fd.k, inp.value), 350); };
   } else if (fd.t === 'select') {
-    const opts = typeof fd.opts === 'function' ? fd.opts() : fd.opts;
+    const opts = typeof fd.opts === 'function' ? fd.opts(S.params) : fd.opts;
     d.className = 'f sel';
     d.innerHTML = `<span>${fd.label}</span><select>${Object.entries(opts).map(([k, l]) => `<option value="${k}"${String(v) === k ? ' selected' : ''}>${esc(l)}</option>`).join('')}</select>`;
     d.querySelector('select').onchange = (e) => onParam(fd.k, e.target.value);
@@ -191,6 +199,9 @@ function onParam(k, v, dragging = false) {
   S.params[k] = v;
   if (k === 'style' && STYLE_PRESETS[S.type]?.[v]) { Object.assign(S.params, STYLE_PRESETS[S.type][v]); syncForm(); }
   if (k === 'metal') store.set('pjc.metal', v);
+  if (k === 'gemSize' && v) { const [L, W] = v.split('x').map(Number); Object.assign(S.params, { sizeMode: 'mm', stoneL: L, stoneW: W }); syncForm(); }
+  if ((k === 'cut' || k === 'gem') && !dragging) { S.params.gemSize = ''; renderForm(); }
+  if ((k === 'sizeMode' || k === 'carat' || k === 'stoneL' || k === 'stoneW') && S.params.gemSize) { S.params.gemSize = ''; const el = $('#params [data-k="gemSize"] select'); if (el) el.value = ''; }
   if (k === 'shape') $('#svgUpload').classList.toggle('hidden', v !== 'custom');
   refreshVisibility();
   if (!dragging) pushHistory();
@@ -236,7 +247,7 @@ function show(model) {
   for (const part of model.parts) {
     const geo = part.pieces.length === 1 ? part.pieces[0] : merge(part.pieces, part.kind === 'stone' ? 0.01 : 0.6);
     if (!geo) continue;
-    const mat = part.kind === 'stone' ? stoneMat(part.gem) : metalMat(part.metal || S.params.metal, S.params.finish);
+    const mat = part.kind === 'stone' ? stoneMat(part.gem) : part.enamel ? enamelMat(part.enamel) : metalMat(part.metal || S.params.metal, S.params.finish);
     const mesh = new THREE.Mesh(geo, mat);
     mesh.name = part.name; mesh.userData.kind = part.kind;
     mesh.visible = !S.hidden.has(part.name) && (part.kind !== 'stone' || S.showStones);
@@ -247,6 +258,7 @@ function show(model) {
   dimsBox.box.copy(box); dimsBox.visible = S.showDims && !box.isEmpty();
   grid.position.y = box.min.y - 0.01;
   updateHud(model, box);
+  editor?.reselect();
 }
 function disposeRoot() { while (root.children.length) { const c = root.children.pop(); if (c.geometry && !c.userData.keepGeo) c.geometry.dispose?.(); } }
 
@@ -494,7 +506,7 @@ function designContext() {
   if (!S.model || !S.m) return '';
   return JSON.stringify({ type: S.type, params: { ...S.params, customOutline: undefined }, measured: { grams: +S.m.grams.toFixed(2), volume_mm3: +S.m.volume.toFixed(1), bbox_mm: S.m.bbox, stones_ct: +S.m.stoneCt.toFixed(2) }, meta: Object.fromEntries(Object.entries(S.model.meta).filter(([k, v]) => typeof v !== 'object' || k === 'stone')), checks: S.v.checks.filter((c) => c.level !== 'info').map((c) => `${c.level}: ${c.title} — ${c.detail}`) }, null, 1);
 }
-async function runAI(prompt, images) {
+async function runAI(prompt, images, { merge = false } = {}) {
   if (!aiSettings.key) { $('#dlgSettings').showModal(); return; }
   addMsg('user', `<p>${esc(prompt)}</p>${images.length ? `<p class="muted small">${images.length} image(s) attached</p>` : ''}`);
   const out = addMsg('bot', '<p class="muted">Thinking…</p>');
@@ -506,9 +518,10 @@ async function runAI(prompt, images) {
     if (r.truncated) out.innerHTML += '<p class="muted">(response hit the length limit)</p>';
     if (r.design) {
       const b = document.createElement('button'); b.className = 'primary'; b.textContent = `Build this ${r.design.type}`;
-      b.onclick = () => applyDesign(r.design.type, r.design.params);
+      const go = () => (merge && r.design.type === S.type ? (Object.assign(S.params, r.design.params), renderForm(), pushHistory(), rebuild()) : applyDesign(r.design.type, r.design.params));
+      b.onclick = go;
       out.appendChild(b);
-      applyDesign(r.design.type, r.design.params);
+      go();
     }
   } catch (e) { out.innerHTML = `<p style="color:var(--fail)">${esc(e.message || e)}</p>`; }
   btns.forEach((b) => b.disabled = false);
@@ -667,6 +680,31 @@ window.addEventListener('error', (e) => console.error(e.error || e.message));
   setType(t, p);
   setTimeout(() => fitView(), 60);
 })();
+
+/* ============================== EDIT MODE + AI EDIT BAR ============================== */
+let editor = null;
+editor = initEditor({ camera, canvas, scene, root, orbit: controls, getState: () => ({ type: S.type, params: S.params }), toast,
+  commit: (patch, msg) => { Object.assign(S.params, patch); pushHistory(); rebuild(); if (msg) toast(msg); } });
+$('#aiBar').onsubmit = (e) => {
+  e.preventDefault();
+  const txt = $('#aiBarInput').value.trim(); if (!txt) return;
+  const r = parseEdit(txt, S.type, S.params);
+  if (r.newDesign) {
+    applyDesign(r.newDesign.type, r.newDesign.params, r.newDesign.notes); setTab('design');
+    toast(`New ${r.newDesign.type}: ${r.newDesign.summary || 'defaults'}`);
+  } else if (r.understood) {
+    Object.assign(S.params, r.params);
+    if (r.params.cut || r.params.gem) S.params.gemSize = '';
+    renderForm(); pushHistory(); rebuild();
+    toast('✓ ' + r.changes.join(' · '));
+  } else if (aiSettings.key) {
+    setTab('ai');
+    runAI(`EDIT the current ${S.type}: ${txt}. Keep everything else unchanged and return only the keys that change in the JSON block.`, [], { merge: true });
+  } else {
+    toast('Not understood offline. Try: “6 prongs”, “longer petals”, “collet setting”, “rose gold”, “thicker band”, “add spikes” — or add a Claude key in ⚙ AI.');
+  }
+  $('#aiBarInput').value = '';
+};
 
 initImageTab({ setType: (t, p) => { S.hidden.clear(); setType(t, { ...defaultsFor(t), metal: S.params.metal, ...p }); }, setTab, toast, md, runAI, defaultsFor, getParams: () => S.params, getType: () => S.type });
 initVariations({ getState: () => ({ type: S.type, params: S.params }), apply: (t, p) => { S.hidden.clear(); setType(t, p); }, toast, generate, metalMat, stoneMat, scene });

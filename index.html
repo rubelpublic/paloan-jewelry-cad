@@ -207,6 +207,7 @@
         <button id="tglStones" title="Hide stones" class="on">◆</button>
         <button id="tglDims" title="Dimensions" class="on">⟷</button>
         <button id="tglSpin" title="Turntable">⟳</button>
+        <button id="tglEdit" title="Edit mode: select parts, gumball move/rotate/scale, polar array, mirror">✥ Edit</button>
         <span class="sep"></span>
         <button id="btnUndo" title="Undo (Ctrl+Z)">↶</button>
         <button id="btnRedo" title="Redo (Ctrl+Y)">↷</button>
@@ -214,6 +215,18 @@
         <input type="range" id="refOpacity" min="0" max="1" step="0.05" value="0.4" title="Overlay opacity" />
       </div>
       <div class="hud" id="hud"></div>
+      <div class="edit-panel hidden" id="editPanel">
+        <b id="epName">Part</b>
+        <div class="seg"><button data-tmode="translate" class="on" title="Move (W)">Move</button><button data-tmode="rotate" title="Rotate (E)">Rotate</button><button data-tmode="scale" title="Scale / taper (R)">Scale</button></div>
+        <label>Polar array <input type="number" id="epArray" min="1" max="36" value="1" /></label>
+        <label class="chk"><input type="checkbox" id="epMirror" /> Mirror copy (X)</label>
+        <div class="btnrow"><button id="epHide">Delete part</button><button id="epReset">Reset part</button></div>
+        <div class="btnrow"><button id="epResetAll" class="ghost">Clear all edits</button><button id="epDone" class="primary">Done</button></div>
+      </div>
+      <form class="ai-bar" id="aiBar" autocomplete="off">
+        <span>✨</span><input id="aiBarInput" type="text" placeholder="Edit with words: “6 prongs, longer petals, rose gold” · or “new gothic pendant with spikes”" />
+        <button type="submit" class="primary">Apply</button>
+      </form>
       <div class="busy" id="busy">Building…</div>
     </section>
 

@@ -397,10 +397,17 @@ def build_head(cut, L, W, base_z, xf, head_type="prong", prong_count=4, prong_st
         r = math.hypot(p[0], p[1]) or 1
         return (p[0] * (r + d) / r, p[1] * (r + d) / r)
 
-    if head_type in ("prong", "halo"):
-        top = info["top"] * (0.75 if prong_style == "claw" else 0.62)
+    taper = g("basketTaper", taper)
+    if head_type in ("prong", "halo", "double-prong"):
+        top = info["top"] * (0.75 if prong_style == "claw" else 0.62) * g("prongHeight", 1.0)
         prongs = []
-        for ang in prong_angles(cut, prong_count):
+        angs = prong_angles(cut, prong_count)
+        if cut not in ("pear", "marquise", "heart", "trillion", "princess", "emerald", "asscher", "radiant", "cushion"):
+            angs = [a + math.radians(g("prongRotate", 0)) for a in angs]
+        if head_type == "double-prong":
+            d = (pr * 1.35) / ((L + W) / 4.0)
+            angs = [x for a in angs for x in (a - d, a + d)]
+        for ang in angs:
             rp = grow(rim_point(ol, ang), pr - seat_overlap)
             bp = (rp[0] * taper, rp[1] * taper)
             rail = interp([P3(bp[0], bp[1], base_z - 0.4), P3(lerp(bp[0], rp[0], 0.55), lerp(bp[1], rp[1], 0.55), base_z * 0.45),
@@ -413,7 +420,7 @@ def build_head(cut, L, W, base_z, xf, head_type="prong", prong_count=4, prong_st
                 d = d * 0.55 + rg.Vector3d.ZAxis
                 tip = spike(tipc, d, pd * 1.5, pr * 1.02)
             else:
-                tip = sphere(tipc, pr * 1.08)
+                tip = sphere(tipc, pr * 1.08 * g("prongTip", 1.0))
             un = rg.Brep.CreateBooleanUnion([b, tip], TOL) if b is not None and tip is not None else None
             prongs.append(un[0] if un else b)
         if seat:
@@ -447,6 +454,50 @@ def build_head(cut, L, W, base_z, xf, head_type="prong", prong_count=4, prong_st
         if base_z < z0 - 0.2:
             ped = interp([P3(x * 0.7, y * 0.7, base_z - 0.3) for x, y in offset_poly(ol, bezel_wall * 0.5)], True)
             metal.append(("Metal::Head::Bezel", "Bezel pedestal", [extrude_planar(ped, rg.Vector3d(0, 0, z0 - base_z + 0.5))]))
+
+    if head_type in ("collet", "flush", "half-bezel"):
+        lip = min(0.35, mind * 0.06)
+        wall = max(0.5, g("bezelWall", bezel_wall))
+        if head_type == "flush":
+            m = max(0.6, g("flushMargin", 1.0))
+            y_top = info["girdle"] / 2 + info["crown"] * 0.82
+            y_bot = min(base_z - 0.3, info["culet"] - 0.6)
+            crv = interp([P3(x, y, y_bot) for x, y in offset_poly(ol, m)], True)
+            btn = extrude_planar(crv, rg.Vector3d(0, 0, y_top - y_bot))
+            metal.append(("Metal::Head::Bezel", "Flush setting", [boolean_diff(btn, [cutter]) if seat else btn]))
+        else:
+            if head_type == "collet":
+                y_top = info["girdle"] / 2 + info["crown"] * 0.3
+                h = g("colletHeight", 0) or min(-base_z + y_top, (info["top"] - info["culet"]) * 1.15)
+                y_bot = y_top - h
+                T = min(g("colletTaper", 0.6), mind * 0.3)
+                ca, cb = g("chamferA", 0.15), g("chamferB", 0.1)
+                prof = [(-lip, y_top), (wall - ca, y_top), (wall, y_top - ca), (wall - T, y_bot + cb), (wall - T - cb, y_bot), (-lip - T * 0.85, y_bot)]
+            else:
+                y0 = max(base_z, -info["pavilion"] * 0.85)
+                y1 = info["girdle"] / 2 + info["crown"] * 0.35
+                prof = [(-lip, y0), (wall, y0), (wall, y1 - 0.05), (wall - 0.15, y1), (-lip, y1)]
+            ring = resample(ol, 48)
+
+            def section(px, py):
+                r = math.hypot(px, py) or 1.0
+                nx, ny = px / r, py / r
+                return polyline([P3(px + nx * a, py + ny * a, z) for a, z in prof])
+            if head_type == "collet":
+                secs = [section(px, py) for px, py in ring]
+                body = cap(loft(secs, True, straight=True))
+                metal.append(("Metal::Head::Bezel", "Collet", [boolean_diff(body, [cutter]) if seat else body]))
+            else:
+                walls = []
+                for side in (1, -1):
+                    arc = [q for q in ring if side * q[0] > 0 and abs(math.atan2(q[1], abs(q[0]))) < 0.95]
+                    arc.sort(key=lambda q: math.atan2(q[1], q[0] * side))
+                    if len(arc) > 2:
+                        w = cap(loft([section(px, py) for px, py in arc], False, straight=True))
+                        walls.append(boolean_diff(w, [cutter]) if seat else w)
+                metal.append(("Metal::Head::Bezel", "Half bezel", walls))
+    if g("petals", 0) > 0:
+        metal.append(("Metal::Head::Petals", "Petal", build_petals(mind, base_z, info)))
 
     stones = [("Stones::Center", "Center stone", [stone])]
     if head_type == "halo":
@@ -485,6 +536,55 @@ def build_head(cut, L, W, base_z, xf, head_type="prong", prong_count=4, prong_st
     cutter.Transform(xf)
     emit(cutter, "Cutters::Seat", "Stone cutter", "cutter")
     return info, pd
+
+
+def build_petals(mind, base_z, info):
+    """Dual-rail style petals (lofted cupped sections) in a polar array under the stone - local head frame."""
+    count, layers = int(g("petals", 8)), int(g("petalLayers", 2))
+    length, width = g("petalLength", 7), g("petalWidth", 3.2)
+    lift, curl, thick = g("petalLift", 6), g("petalCurl", -0.5), g("petalThick", 0.9)
+    ridge, tip = g("petalRidge", 0.25), g("petalTip", "pointed")
+    r0, z0 = mind * 0.18, base_z + 0.45
+    out = []
+    for layer in range(layers):
+        n = int(round(count * (1 if layer == 0 else 1 + 0.5 * layer)))
+        Lk, Wk = length * (1 - 0.18 * layer), width * (1 - 0.12 * layer)
+        lk = math.radians(lift + layer * 24)
+        ck = curl + layer * 0.7
+        off = (0.5 if layer % 2 else 0) + g("prongRotate", 0) / 360.0 * n
+
+        def mid(u):
+            along = u * Lk
+            return (r0 + math.cos(lk) * along, z0 + layer * 0.6 + math.sin(lk) * along + ck * Lk * 0.25 * u ** 3)
+        secs = []
+        for k in range(15):
+            u = 0.02 + 0.96 * k / 14.0
+            sw = math.sin(math.pi * min(1.0, u) ** 0.85)
+            w = max(0.12, Wk / 2 * (math.sqrt(sw) if tip == "round" else sw))
+            t = max(thick * 0.7, thick * (1 - 0.3 * u))
+            x, z = mid(u)
+            x2, z2 = mid(min(1.0, u + 0.02))
+            tx, tz = x2 - x, z2 - z
+            ln = math.hypot(tx, tz) or 1
+            nx, nz = -tz / ln, tx / ln
+            if nz < 0:
+                nx, nz = -nx, -nz
+            pts = []
+            for j in range(16):
+                a = 2 * math.pi * j / 16
+                c, s_ = math.cos(a), math.sin(a)
+                h = t / 2 * s_ + w * 0.18 * c * c - (ridge * math.exp(-(c / 0.2) ** 2) * min(1, u * 4) if s_ > 0 else 0)
+                pts.append(P3(x + nx * h, w * c, z + nz * h))
+            secs.append(interp(pts, True))
+        petal = cap(loft(secs))
+        if petal is None:
+            continue
+        for i in range(n):
+            b = petal.DuplicateBrep()
+            b.Transform(rg.Transform.Rotation(2 * math.pi * (i + off) / n, rg.Vector3d.ZAxis, rg.Point3d.Origin))
+            out.append(b)
+    log("Petals: %d layers, %d per layer, %.1f x %.1f mm" % (layers, count, length, width))
+    return out
 
 
 # ------------------------------------------------------------------ ring
