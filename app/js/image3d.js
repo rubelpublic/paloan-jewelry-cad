@@ -96,9 +96,10 @@ export function computeMask(R, opts = {}) {
   let mode = opts.mode || 'auto';
   let transparent = 0;
   for (let i = 3; i < rgba.length; i += 4) if (rgba[i] < 250) transparent++;
-  if (mode === 'auto') mode = transparent > n * 0.02 ? 'alpha' : 'color';
+  if (mode === 'auto') mode = transparent > n * 0.02 ? 'alpha' : 'smart';
   const score = new Float32Array(n);
   if (mode === 'alpha') for (let i = 0; i < n; i++) score[i] = rgba[i * 4 + 3] / 255;
+  else if (mode === 'smart') smartScore(R, score);
   else {
     // background = median of the border ring
     const br = [], bg = [], bb = [];
@@ -115,7 +116,7 @@ export function computeMask(R, opts = {}) {
         : Math.min(1, Math.hypot(rgba[k] - B[0], rgba[k + 1] - B[1], rgba[k + 2] - B[2]) / 255);
     }
   }
-  const thr = opts.threshold == null ? Math.max(0.04, otsu(score)) : opts.threshold;
+  const thr = opts.threshold == null ? (mode === 'smart' ? 0.5 : Math.max(0.04, otsu(score))) : opts.threshold;
   let mask = new Uint8Array(n);
   for (let i = 0; i < n; i++) mask[i] = (score[i] > thr) !== !!opts.invert ? 1 : 0;
   const sm = opts.smooth ?? 1;
@@ -132,7 +133,50 @@ export function computeMask(R, opts = {}) {
     const c = components(mask, w, h, 0);
     for (let i = 0; i < n; i++) if (!mask[i] && !c.border[c.labels[i]]) mask[i] = 1;
   }
+  // brush strokes always win: +1 keep, −1 remove
+  if (opts.paint && opts.paint.length === n) for (let i = 0; i < n; i++) { if (opts.paint[i] > 0) mask[i] = 1; else if (opts.paint[i] < 0) mask[i] = 0; }
   return { mask, score, threshold: thr, mode };
+}
+
+/**
+ * Smart background score: k-means colour clusters (RGB + brightness); clusters dominating the image border are background.
+ * Score = 1 − (probability the pixel belongs to a background cluster), softened by distance to the nearest background centre.
+ */
+function smartScore(R, score) {
+  const { w, h, rgba } = R, n = w * h, K = 6;
+  const feat = (i) => [rgba[i * 4], rgba[i * 4 + 1], rgba[i * 4 + 2]];
+  // init centres spread over brightness
+  const idx = [...Array(n).keys()].sort((a, b) => luma(...feat(a)) - luma(...feat(b)));
+  let C = Array.from({ length: K }, (_, k) => feat(idx[Math.floor(((k + 0.5) / K) * (n - 1))]));
+  const lab = new Uint8Array(n);
+  const step = Math.max(1, Math.floor(n / 20000));
+  for (let it = 0; it < 8; it++) {
+    const sum = Array.from({ length: K }, () => [0, 0, 0, 0]);
+    for (let i = 0; i < n; i += step) {
+      const f = feat(i); let best = 0, bd = Infinity;
+      for (let k = 0; k < K; k++) { const d = (f[0] - C[k][0]) ** 2 + (f[1] - C[k][1]) ** 2 + (f[2] - C[k][2]) ** 2; if (d < bd) { bd = d; best = k; } }
+      const s = sum[best]; s[0] += f[0]; s[1] += f[1]; s[2] += f[2]; s[3]++;
+    }
+    C = C.map((c, k) => (sum[k][3] ? [sum[k][0] / sum[k][3], sum[k][1] / sum[k][3], sum[k][2] / sum[k][3]] : c));
+  }
+  const nearest = (f) => { let best = 0, bd = Infinity; for (let k = 0; k < K; k++) { const d = (f[0] - C[k][0]) ** 2 + (f[1] - C[k][1]) ** 2 + (f[2] - C[k][2]) ** 2; if (d < bd) { bd = d; best = k; } } return best; };
+  for (let i = 0; i < n; i++) lab[i] = nearest(feat(i));
+  const ring = Math.max(1, Math.round(Math.min(w, h) * 0.04));
+  const border = new Float64Array(K), total = new Float64Array(K);
+  let nb = 0;
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    const i = y * w + x; total[lab[i]]++;
+    if (x < ring || y < ring || x >= w - ring || y >= h - ring) { border[lab[i]]++; nb++; }
+  }
+  const bgK = [];
+  for (let k = 0; k < K; k++) if (border[k] / nb > 0.12 || (border[k] / Math.max(1, total[k]) > 0.35 && border[k] / nb > 0.04)) bgK.push(k);
+  if (!bgK.length) bgK.push([...border.keys()].sort((a, b) => border[b] - border[a])[0]);
+  for (let i = 0; i < n; i++) {
+    if (!bgK.includes(lab[i])) { score[i] = 1; continue; }
+    const f = feat(i);
+    const d = Math.min(...bgK.map((k) => Math.sqrt((f[0] - C[k][0]) ** 2 + (f[1] - C[k][1]) ** 2 + (f[2] - C[k][2]) ** 2)));
+    score[i] = Math.min(0.49, d / 255);                     // background pixels stay below the 0.5 cut
+  }
 }
 
 /** Height map 0..1 from luminance inside the mask (percentile-normalised, optional blur/invert). */

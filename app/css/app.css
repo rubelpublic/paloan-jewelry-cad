@@ -127,6 +127,17 @@ label.chk { display: flex; gap: 8px; align-items: center; color: var(--text); }
 dialog { background: var(--bg2); color: var(--text); border: 1px solid var(--line); border-radius: 14px; width: min(460px, 92vw); padding: 18px; }
 dialog::backdrop { background: rgba(0,0,0,.6); }
 
+/* v1.3 */
+details.tool { border: 1px solid var(--line); border-radius: var(--r); padding: 6px 10px; margin: 8px 0; background: var(--panel); }
+details.tool summary { cursor: pointer; color: var(--gold2); font-size: 13px; }
+details.tool textarea { margin: 8px 0; }
+#sketchPad { width: 100%; aspect-ratio: 1; background: #fff; border-radius: 8px; margin-top: 8px; touch-action: none; cursor: crosshair; }
+.seg.brush { top: auto; bottom: 6px; right: 6px; align-items: center; }
+.seg.brush input { width: 46px; padding: 2px 4px; margin: 0; font-size: 11px; }
+button.big { width: 100%; padding: 12px; font-size: 14px; margin-bottom: 6px; }
+.small-btn { padding: 3px 9px; font-size: 12px; border-radius: 20px; border-color: var(--gold); color: var(--gold2); }
+fieldset.mixer { margin-top: 4px; }
+
 /* edit mode + AI bar */
 .edit-panel { position: absolute; right: 12px; top: 56px; width: 220px; background: rgba(20,22,27,.94); border: 1px solid var(--gold); border-radius: 12px; padding: 10px; font-size: 12.5px; z-index: 3; }
 .edit-panel b { display: block; color: var(--gold2); margin-bottom: 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

@@ -81,13 +81,16 @@ export function initVariations({ getState, apply, toast, generate, metalMat, sto
     scene.remove(g);
     return url;
   }
-  async function fill() {
+  let lastItems = null;
+  async function fill(items = null) {
     setup();
-    const { type, params } = getState();
+    const { type: curType, params } = getState();
     grid.innerHTML = '';
+    lastItems = items;
     const r = rng(seed++);
-    for (let i = 0; i < 6; i++) {
-      const v = mutate(type, params, r);
+    const list = items || Array.from({ length: 6 }, () => ({ type: curType, ...mutate(curType, params, r) }));
+    for (const v of list) {
+      const type = v.type;
       const fig = document.createElement('figure');
       fig.innerHTML = '<img alt="" /><figcaption>building…</figcaption>';
       grid.appendChild(fig);
@@ -100,6 +103,7 @@ export function initVariations({ getState, apply, toast, generate, metalMat, sto
       } catch (e) { fig.querySelector('figcaption').textContent = 'failed: ' + e.message; }
     }
   }
-  document.querySelector('#btnVariations').onclick = () => { dlg.showModal(); fill(); };
-  document.querySelector('#btnMoreVar').onclick = () => fill();
+  document.querySelector('#btnVariations').onclick = () => { document.querySelector('#varTitle').textContent = 'Design variations'; dlg.showModal(); fill(); };
+  document.querySelector('#btnMoreVar').onclick = () => fill(lastItems);
+  return { showItems: (items, title) => { document.querySelector('#varTitle').textContent = title; dlg.showModal(); fill(items); } };
 }

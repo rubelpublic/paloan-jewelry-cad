@@ -67,6 +67,15 @@
           <button id="btnVariations">✦ 6 design variations</button>
         </div>
         <div class="btnrow">
+          <button id="btnSet">◈ Matching set (ring · pendant · earrings · bangle)</button>
+        </div>
+        <fieldset class="mixer">
+          <legend>Style mixer</legend>
+          <div class="row2"><label>Style A <select id="mixA"></select></label><label>Style B <select id="mixB"></select></label></div>
+          <div class="f"><span>Blend <em class="muted" id="mixVal">50% / 50%</em></span><input type="range" id="mixT" min="0" max="1" step="0.05" value="0.5" style="grid-column:1/-1" /></div>
+          <button id="btnMix" class="primary" style="width:100%">Apply mixed style</button>
+        </fieldset>
+        <div class="btnrow">
           <button id="btnOptimize" class="primary">Optimize to target weight</button>
           <button id="btnReset">Reset</button>
         </div>
@@ -80,15 +89,27 @@
       <section data-panel="image">
         <h3>Image → 3D</h3>
         <p class="muted">Upload a photo, sketch, logo, AI render or transparent PNG. Paloan removes the background, reads the shape and shading, and builds real castable 3D: relief charms, silhouette pendants, coins, signet faces — or recognises the jewelry type, metal and stone from a product photo.</p>
-        <label class="drop" id="dropImg3d">Drop an image, paste (Ctrl+V) or <u>browse / camera</u><input type="file" id="fileImg3d" accept="image/*" /></label>
+        <label class="drop" id="dropImg3d">Drop a product photo / image, paste (Ctrl+V) or <u>browse / camera</u><input type="file" id="fileImg3d" accept="image/*" /></label>
+        <details class="tool">
+          <summary>✨ No image? Generate a concept (free AI)</summary>
+          <textarea id="conceptPrompt" rows="2" placeholder="e.g. 18k gold lotus flower ring with a round blue sapphire and green enamel petals"></textarea>
+          <button id="btnConcept" class="primary" style="width:100%">✨ Generate concept image (free)</button>
+          <p class="muted small">Free: uses Puter.js (no key, free sign-in) or your free Pollinations key. The result loads here, ready for Photo → 3D.</p>
+        </details>
+        <details class="tool">
+          <summary>✎ Sketch a shape</summary>
+          <canvas id="sketchPad" width="320" height="320"></canvas>
+          <div class="btnrow"><label class="small">Pen <input id="sketchWidth" type="number" value="10" min="2" max="40" style="width:64px" /></label><button id="sketchClear">Clear</button><button id="sketchUse" class="primary">Use sketch</button></div>
+        </details>
         <div class="img3d-preview hidden" id="img3dWrap">
           <canvas id="img3dCanvas"></canvas>
           <div class="seg"><button data-view3d="mask" class="on">Mask</button><button data-view3d="height">Height</button><button data-view3d="orig">Original</button></div>
+          <div class="seg brush"><button data-brush="1" title="Paint areas to KEEP">＋ Keep</button><button data-brush="-1" title="Paint areas to REMOVE">－ Remove</button><input id="i3BrushSize" type="number" value="8" min="2" max="40" title="Brush size" /><button id="i3ClearPaint" title="Clear brush strokes">↺</button></div>
         </div>
         <fieldset id="img3dControls" class="hidden">
           <legend>Background removal</legend>
           <div class="row2">
-            <label>Detect by <select id="i3Mode"><option value="auto">Auto</option><option value="color">Colour difference</option><option value="luma">Brightness</option><option value="alpha">PNG transparency</option></select></label>
+            <label>Detect by <select id="i3Mode"><option value="auto">Auto (smart)</option><option value="smart">Smart colour clusters</option><option value="color">Colour difference</option><option value="luma">Brightness</option><option value="alpha">PNG transparency</option></select></label>
             <label>Smooth <input id="i3Smooth" type="number" min="0" max="4" step="1" value="1" /></label>
           </div>
           <div class="f"><span>Threshold <em class="muted" id="i3ThrVal">auto</em></span><input type="range" id="i3Thr" min="0" max="1" step="0.01" value="0" style="grid-column:1/-1" /></div>
@@ -108,13 +129,14 @@
         </fieldset>
         <div id="img3dActions" class="hidden">
           <h4>Convert to</h4>
+          <button data-conv="photo3d" class="primary big">📷 Product photo → fully editable 3D</button>
+          <label class="chk small"><input type="checkbox" id="i3UseAI" checked /> Let the free AI refine the reading (Puter by default)</label>
           <div class="grid2">
-            <button data-conv="relief" class="primary">Relief charm / pendant</button>
+            <button data-conv="relief">Relief charm / pendant</button>
             <button data-conv="silhouette">Silhouette pendant (+ stones, openwork)</button>
             <button data-conv="coin">Coin / medallion</button>
             <button data-conv="signet">Signet ring face</button>
-            <button data-conv="detect">Auto-detect jewelry from photo</button>
-            <button data-conv="ai">AI interpret (Claude)</button>
+            <button data-conv="ai">AI interpret + build plan</button>
           </div>
           <div id="img3dInfo" class="md small"></div>
         </div>
@@ -128,7 +150,7 @@
         <div id="imgThumbs" class="thumbs"></div>
         <div class="btnrow">
           <button id="btnParse">Build offline</button>
-          <button id="btnAsk" class="primary">Ask Claude</button>
+          <button id="btnAsk" class="primary">Ask AI (free)</button>
         </div>
         <div class="btnrow">
           <button id="btnReview">Review CAD vs reference (AI)</button>
@@ -238,7 +260,7 @@
         <div class="kv" id="wKv"></div>
       </div>
       <div class="card">
-        <div class="card-h"><b>Manufacturability</b><span id="score" class="score">—</span></div>
+        <div class="card-h"><b>Manufacturability</b><span><button id="btnAutoFix" class="small-btn" title="Fix every warning and failure automatically">⚒ Auto-fix</button> <span id="score" class="score">—</span></span></div>
         <ul id="checks" class="checks"></ul>
       </div>
       <div class="card">
@@ -255,18 +277,21 @@
   <dialog id="dlgSettings">
     <form method="dialog">
       <h3>AI settings</h3>
-      <p class="muted">Paste an Anthropic API key to enable Claude. It is stored only in this browser and sent only to api.anthropic.com. Without a key every other feature still works offline.</p>
-      <label>API key <input id="apiKey" type="password" placeholder="sk-ant-…" autocomplete="off" /></label>
-      <label class="chk"><input type="checkbox" id="rememberKey" /> Remember on this device</label>
-      <label>Model <select id="aiModel"></select></label>
-      <p class="muted small">Server-side refusal fallback is enabled, so a declined request is retried automatically on a fallback model.</p>
+      <p class="muted">AI is <b>free out of the box</b> with <b>Puter.js</b> — no API key; you sign in once to a free Puter account. Or use a provider with a <b>free key</b>: Pollinations, Google Gemini, Groq or OpenRouter (free models). Keys stay in this browser and go only to the chosen provider.</p>
+      <label>Provider <select id="aiProvider"></select></label>
+      <label>Model <input id="aiModel" type="text" list="aiModels" autocomplete="off" placeholder="blank = provider default" /><datalist id="aiModels"></datalist></label>
+      <div id="aiKeyRow"><label>API key <input id="apiKey" type="password" placeholder="paste your key" autocomplete="off" /></label>
+      <p class="small"><a id="aiKeyLink" href="#" target="_blank" rel="noopener">Get a free key →</a></p>
+      <label class="chk"><input type="checkbox" id="rememberKey" /> Remember on this device</label></div>
+      <p class="muted small" id="aiNote"></p>
+      <button type="button" id="btnTestAI">Test connection</button> <span id="aiTestOut" class="small muted"></span>
       <div class="btnrow"><button value="cancel">Cancel</button><button id="btnSaveKey" value="ok" class="primary">Save</button></div>
     </form>
   </dialog>
 
   <dialog id="dlgVariations" class="wide">
     <form method="dialog">
-      <div class="card-h"><h3>Design variations</h3><span><button type="button" id="btnMoreVar">↻ More</button> <button value="close">Close</button></span></div>
+      <div class="card-h"><h3 id="varTitle">Design variations</h3><span><button type="button" id="btnMoreVar">↻ More</button> <button value="close">Close</button></span></div>
       <p class="muted small">Six manufacturable directions based on your current piece. Click one to continue designing from it.</p>
       <div id="varGrid" class="var-grid"></div>
     </form>

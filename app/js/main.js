@@ -20,7 +20,9 @@ import { validate } from './validate.js';
 import { optimizeWeight } from './optimize.js';
 import { merge, resample } from './geom/util.js';
 import { parseBrief } from './brief.js';
-import { askClaude, aiSettings, MODELS, fileToImage, resetConversation } from './ai.js';
+import { askAI, aiSettings, PROVIDERS, fileToImage, resetConversation } from './ai.js';
+import { autoFixPatch, matchingSet, mixStyles } from './designtools.js';
+import { rasterize, computeMask, analyzeImage } from './image3d.js';
 import { loadMeshFile, guessUnit, analyzeMesh, reportMarkdown } from './analyzer.js';
 import { rhinoScript, workflow, workflowHtml, workflowMd } from './rhino.js';
 
@@ -394,6 +396,7 @@ $('#tglSection').onclick = (e) => { S.section = !S.section; e.currentTarget.clas
 $('#tglStones').onclick = (e) => { S.showStones = !S.showStones; e.currentTarget.classList.toggle('on', S.showStones); root.children.forEach((c) => { if (c.userData.kind === 'stone') c.visible = S.showStones && !S.hidden.has(c.name); }); };
 $('#tglDims').onclick = (e) => { S.showDims = !S.showDims; e.currentTarget.classList.toggle('on', S.showDims); dimsBox.visible = S.showDims; $('#hud').style.display = S.showDims ? '' : 'none'; };
 $('#fileRef').onchange = (e) => { const fl = e.target.files[0]; if (!fl) return; const img = $('#refOverlay'); img.src = URL.createObjectURL(fl); img.style.display = 'block'; img.style.opacity = $('#refOpacity').value; S.refFile = fl; toast('Reference overlay on — orbit the model to match the view.'); };
+$('#refOverlay').ondblclick = () => { $('#refOverlay').style.display = 'none'; };
 $('#refOpacity').oninput = (e) => { $('#refOverlay').style.opacity = e.target.value; };
 
 $('#selType').onchange = (e) => { S.hidden.clear(); setType(e.target.value, { metal: S.params.metal }); };
@@ -506,14 +509,28 @@ function designContext() {
   if (!S.model || !S.m) return '';
   return JSON.stringify({ type: S.type, params: { ...S.params, customOutline: undefined }, measured: { grams: +S.m.grams.toFixed(2), volume_mm3: +S.m.volume.toFixed(1), bbox_mm: S.m.bbox, stones_ct: +S.m.stoneCt.toFixed(2) }, meta: Object.fromEntries(Object.entries(S.model.meta).filter(([k, v]) => typeof v !== 'object' || k === 'stone')), checks: S.v.checks.filter((c) => c.level !== 'info').map((c) => `${c.level}: ${c.title} — ${c.detail}`) }, null, 1);
 }
-async function runAI(prompt, images, { merge = false } = {}) {
-  if (!aiSettings.key) { $('#dlgSettings').showModal(); return; }
-  addMsg('user', `<p>${esc(prompt)}</p>${images.length ? `<p class="muted small">${images.length} image(s) attached</p>` : ''}`);
-  const out = addMsg('bot', '<p class="muted">Thinking…</p>');
+/** Text description of images for AI providers that cannot see pictures (free Pollinations). */
+async function notesForImages(images) {
+  const notes = [];
+  for (const im of images) {
+    try {
+      const img = new Image(); img.src = `data:${im.media_type};base64,${im.data}`; await img.decode();
+      const R = rasterize(img, 240), mk = computeMask(R, { mode: 'auto', fillHoles: false });
+      const a = analyzeImage(R, mk);
+      if (a.ok) notes.push(`${im.name || 'image'}: looks like a ${a.type}. ${a.notes.join(' ')} Aspect ${a.metrics.aspect.toFixed(2)}, ${a.metrics.holes.count} enclosed openings, ${a.metrics.spikes} sharp points.`);
+    } catch { /* skip */ }
+  }
+  return notes.join('\n');
+}
+async function runAI(prompt, images, { merge = false, imageNotes = '' } = {}) {
+  if (!aiSettings.ready) { openSettings(); toast(`Add your free ${aiSettings.label} key, or pick Pollinations (no key).`); return; }
+  addMsg('user', `<p>${esc(prompt)}</p>${images.length ? `<p class="muted small">${images.length} image(s) attached${aiSettings.vision ? '' : ' — described in text for the free model'}</p>` : ''}`);
+  const out = addMsg('bot', `<p class="muted">Thinking… (${esc(aiSettings.label)})</p>`);
+  if (images.length && !aiSettings.vision && !imageNotes) imageNotes = await notesForImages(images);
   let acc = '';
   const btns = [$('#btnAsk'), $('#btnReview')]; btns.forEach((b) => b.disabled = true);
   try {
-    const r = await askClaude({ prompt, images, context: designContext(), onText: (d) => { acc += d; out.innerHTML = md(acc); } });
+    const r = await askAI({ prompt, images, imageNotes, context: designContext(), onText: (d) => { acc += d; out.innerHTML = md(acc); } });
     out.innerHTML = md(r.text);
     if (r.truncated) out.innerHTML += '<p class="muted">(response hit the length limit)</p>';
     if (r.design) {
@@ -551,9 +568,40 @@ $('#fileImg').onchange = (e) => addImages(e.target.files);
 dropZone($('#dropImg'), addImages);
 
 /* settings */
-$('#aiModel').innerHTML = Object.entries(MODELS).map(([k, l]) => `<option value="${k}">${l}</option>`).join('');
-$('#btnSettings').onclick = () => { $('#apiKey').value = aiSettings.key; $('#aiModel').value = aiSettings.model; $('#dlgSettings').showModal(); };
-$('#btnSaveKey').onclick = () => { aiSettings.set($('#apiKey').value.trim(), $('#rememberKey').checked); aiSettings.model = $('#aiModel').value; toast($('#apiKey').value ? 'Claude enabled' : 'Key cleared'); };
+$('#aiProvider').innerHTML = Object.entries(PROVIDERS).map(([k, p]) => `<option value="${k}">${esc(p.label)}</option>`).join('');
+function fillProvider(prov) {
+  const P = PROVIDERS[prov];
+  const was = aiSettings.provider; aiSettings.provider = prov;
+  $('#aiModels').innerHTML = P.models.map((m) => `<option value="${m}">`).join('');
+  $('#aiModel').value = aiSettings.model;
+  $('#apiKey').value = aiSettings.keyFor(prov);
+  $('#aiKeyRow').style.display = P.needsKey ? '' : 'none';
+  $('#aiKeyLink').href = P.keyUrl; $('#aiKeyLink').textContent = P.free ? 'Get a free key →' : 'Get a key →';
+  $('#aiNote').textContent = prov === 'puter' ? 'Free, no API key: the first request opens a Puter sign-in window (free account). Reads photos and generates images. Model blank = Puter default.' : prov === 'pollinations' ? 'Free key from enter.pollinations.ai (publishable pk_ keys work in the browser). Also powers free concept images.' : P.vision ? 'This provider can read your photos directly.' : '';
+  aiSettings.provider = was;
+}
+function openSettings() { $('#aiProvider').value = aiSettings.provider; fillProvider(aiSettings.provider); $('#aiTestOut').textContent = ''; $('#dlgSettings').showModal(); }
+function saveSettings() {
+  const prov = $('#aiProvider').value;
+  aiSettings.provider = prov;
+  if (PROVIDERS[prov].needsKey) aiSettings.set($('#apiKey').value.trim(), $('#rememberKey').checked, prov);
+  if ($('#aiModel').value.trim()) aiSettings.model = $('#aiModel').value.trim();
+  $('#btnSettings').textContent = '⚙ AI · ' + aiSettings.label;
+}
+$('#aiProvider').onchange = (e) => fillProvider(e.target.value);
+$('#btnSettings').onclick = openSettings;
+$('#btnSaveKey').onclick = () => { saveSettings(); toast(aiSettings.ready ? `${aiSettings.label} ready` : 'Key missing for this provider'); };
+$('#btnTestAI').onclick = async () => {
+  saveSettings();
+  $('#aiTestOut').textContent = 'Testing…';
+  try {
+    const t0 = performance.now();
+    const r = await askAI({ prompt: 'Reply with exactly: PALOAN OK' });
+    resetConversation();
+    $('#aiTestOut').textContent = `✓ ${r.text.trim().slice(0, 40)} (${((performance.now() - t0) / 1000).toFixed(1)} s)`;
+  } catch (e) { $('#aiTestOut').textContent = '✗ ' + e.message; }
+};
+$('#btnSettings').textContent = '⚙ AI · ' + aiSettings.label;
 
 /* ============================== MESH LAB ============================== */
 function dropZone(el, cb) {
@@ -697,7 +745,7 @@ $('#aiBar').onsubmit = (e) => {
     if (r.params.cut || r.params.gem) S.params.gemSize = '';
     renderForm(); pushHistory(); rebuild();
     toast('✓ ' + r.changes.join(' · '));
-  } else if (aiSettings.key) {
+  } else if (aiSettings.ready) {
     setTab('ai');
     runAI(`EDIT the current ${S.type}: ${txt}. Keep everything else unchanged and return only the keys that change in the JSON block.`, [], { merge: true });
   } else {
@@ -706,8 +754,41 @@ $('#aiBar').onsubmit = (e) => {
   $('#aiBarInput').value = '';
 };
 
-initImageTab({ setType: (t, p) => { S.hidden.clear(); setType(t, { ...defaultsFor(t), metal: S.params.metal, ...p }); }, setTab, toast, md, runAI, defaultsFor, getParams: () => S.params, getType: () => S.type });
-initVariations({ getState: () => ({ type: S.type, params: S.params }), apply: (t, p) => { S.hidden.clear(); setType(t, p); }, toast, generate, metalMat, stoneMat, scene });
+initImageTab({ setType: (t, p) => { S.hidden.clear(); setType(t, { ...defaultsFor(t), metal: S.params.metal, ...p }); }, setTab, toast, md, runAI, defaultsFor, getParams: () => S.params, getType: () => S.type,
+  fitView: (v) => setTimeout(() => fitView(v), 900), setRefFile: (f) => { S.refFile = f; } });
+
+/* ============================== AUTO-FIX / MATCHING SET / STYLE MIXER ============================== */
+document.addEventListener('click', (e) => { if (e.target.id === 'btnAutoFix') autoFix(); });
+async function autoFix() {
+  if (!S.model) return;
+  const all = [];
+  let p = { ...S.params };
+  for (let pass = 0; pass < 3; pass++) {
+    const model = generate(S.type, p, { csg: false });
+    const m = measure(model, p.metal, { res: 90 });
+    const v = validate(model, m, p, p.metal);
+    const r = autoFixPatch(S.type, p, model.meta, v.checks);
+    if (!r.fixes.length) break;
+    p = { ...p, ...r.patch };
+    all.push(...r.fixes);
+  }
+  if (!all.length) return toast('Nothing to fix — no warnings or failures that parameters can solve.');
+  S.params = p; renderForm(); pushHistory(); rebuild();
+  showMsg('Auto-fix applied', all.map((x) => '- ' + x).join('\n') + '\n\n_Undo with Ctrl+Z._');
+  toast(`⚒ ${all.length} fix(es) applied`);
+  if (S.params.targetWeight > 0) setTimeout(() => { const w = S.v?.checks.find((c) => c.title === 'Weight off target'); if (w) $('#btnOptimize').click(); }, 1500);
+}
+const styleNames = Object.keys(STYLE_NOTES);
+['#mixA', '#mixB'].forEach((sel, i) => { $(sel).innerHTML = styleNames.map((k) => `<option value="${k}">${k[0].toUpperCase() + k.slice(1)}</option>`).join(''); $(sel).value = i ? 'floral' : 'gothic'; });
+$('#mixT').oninput = (e) => { const t = +e.target.value; $('#mixVal').textContent = `${Math.round((1 - t) * 100)}% ${$('#mixA').value} / ${Math.round(t * 100)}% ${$('#mixB').value}`; };
+$('#btnMix').onclick = () => {
+  if (!STYLE_PRESETS[S.type]) return toast('Style mixing works for rings and pendants.');
+  S.params = mixStyles(S.type, S.params, $('#mixA').value, $('#mixB').value, +$('#mixT').value);
+  renderForm(); pushHistory(); rebuild(); toast('Mixed style applied — fine-tune any parameter.');
+};
+
+const gallery = initVariations({ getState: () => ({ type: S.type, params: S.params }), apply: (t, p) => { S.hidden.clear(); setType(t, p); }, toast, generate, metalMat, stoneMat, scene });
+$('#btnSet').onclick = () => gallery.showItems(matchingSet(S.type, S.params), 'Matching set — click a piece to design it');
 
 // expose for debugging / automation
 window.PJC = { S, generate, measure, validate, setType, fitView, root, scene, camera, renderer };

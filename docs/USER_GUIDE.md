@@ -52,6 +52,26 @@
   - Start with "new …" to begin a new design.
   - Anything the offline parser doesn't understand goes to Claude (with an API key) and only the changed parameters are applied.
 
+## 1e. Free AI, photo → 3D, auto-fix, sets, style mixer (v1.3)
+- **⚙ AI settings:** the default is **Puter.js**, free with no API key. The first request opens a free Puter sign-in. Other providers with **free keys**:
+  - Pollinations: https://enter.pollinations.ai/keys (also powers concept images)
+  - Google Gemini: https://aistudio.google.com/app/apikey
+  - Groq: https://console.groq.com/keys
+  - OpenRouter, using `:free` models: https://openrouter.ai/keys
+
+  All of these can read photos. Claude needs a paid key. *Test connection* checks the setup.
+- **Free concept images:** Image → 3D → *Generate a concept*. Describe the piece and the image loads ready for conversion.
+- **Sketch pad:** draw an outline, then *Use sketch* to get a silhouette pendant or relief.
+- **Background brush:** *＋ Keep* / *－ Remove* paints over the preview to fix the mask. ↺ clears your strokes.
+- **📷 Product photo → fully editable 3D:**
+  - Detects type, metal, stone, size, finger hole and spikes, and builds a parametric model.
+  - The photo is overlaid in front view so you can match it (double-click the overlay to hide it).
+  - With *Let the AI refine* ticked, the AI corrects the parameters.
+  - Everything stays editable: sliders, ✥ Edit gumball, the ✨ AI bar.
+- **⚒ Auto-fix** (Manufacturability card) applies parameter fixes for every warning and failure, up to 3 passes. Undo with Ctrl+Z.
+- **◈ Matching set** shows a coordinated ring, pendant, studs, drops, bangle and chain as thumbnails. Click one to design it.
+- **Style mixer:** choose two styles and a blend, then *Apply mixed style*.
+
 ## 2. Right panel
 - **Weight card**: finished weight in the chosen alloy (pairs for earrings), metal volume (exact union of all parts), cast weight (+4 %), resin/wax model weight, surface area, total carats, bounding box, metal cost (set price on the Report tab).
 - **Manufacturability**: every check with pass / warn / fail, the measured value and the fix. Score = 100 − 20 per fail − 6 per warn.
